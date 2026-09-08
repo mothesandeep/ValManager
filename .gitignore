@@ -17,3 +17,6 @@ app/android/.gradle
 app/android/build
 app/android/app/build
 app/android/capacitor-cordova-android-plugins
+
+# Playwright MCP
+.playwright-mcp/

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
-import { Plus, Pencil, Trash2, Check, X, Layers, AlertCircle, Sparkles } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X, Layers, AlertCircle } from 'lucide-react'
 import {
   fetchParties,
   fetchReceipts,
@@ -195,6 +195,9 @@ export default function Receiving() {
       return '200'
     }
   })
+
+  // Toggle for custom per-rola weight input per bag
+  const [showPerRola, setShowPerRola] = useState<Record<string, boolean>>({})
 
   const [deleting, setDeleting] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -588,17 +591,12 @@ export default function Receiving() {
           {/* Bags List Section */}
           <div className="mb-6">
             <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h4 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--color-ink)' }}>
-                  Bag Entries ({bags.length})
-                </h4>
-                <p className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                  Gross weight (g) & Rola count are required for each bag.
-                </p>
-              </div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-ink-soft)' }}>
+                Bag Entries ({bags.length})
+              </h4>
             </div>
 
-            <div className="flex flex-col gap-3.5">
+            <div className="flex flex-col divide-y divide-[var(--color-border-soft)]">
               {bagValidations.map(({ bag: b, validation }, index) => {
                 const showGrossError =
                   Boolean(validation.grossError) &&
@@ -614,23 +612,13 @@ export default function Receiving() {
                 return (
                   <div
                     key={b.id}
-                    className="p-4 rounded-xl transition-all"
-                    style={{
-                      background: '#ffffff',
-                      border:
-                        validation.isValid
-                          ? '1px solid var(--color-border)'
-                          : showGrossError || showRolaError || showPerRolaError || isTareInvalid
-                          ? '1.5px solid var(--color-due)'
-                          : '1px solid var(--color-border)',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                    }}
+                    className="py-4 first:pt-0 last:pb-0"
                   >
-                    {/* Bag Card Top Bar */}
-                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-[var(--color-border-soft)]">
+                    {/* Bag Strip Header */}
+                    <div className="flex items-center justify-between mb-2.5">
                       <div className="flex items-center gap-2">
                         <span
-                          className="px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wide"
+                          className="px-2 py-0.5 rounded text-xs font-semibold"
                           style={{
                             background: 'var(--color-border-soft)',
                             color: 'var(--color-ink)',
@@ -639,32 +627,25 @@ export default function Receiving() {
                           Bag {index + 1}
                         </span>
 
-                        {/* Subtle Status Badge */}
                         {validation.isValid ? (
                           <span
-                            className="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1"
+                            className="px-1.5 py-0.5 rounded text-[11px] font-medium flex items-center gap-1"
                             style={{
                               background: 'var(--color-positive-bg)',
                               color: 'var(--color-positive)',
                             }}
                           >
-                            <Check size={12} strokeWidth={2.5} /> Complete
+                            <Check size={11} strokeWidth={2.5} /> Complete
                           </span>
                         ) : (
                           <span
-                            className="px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1"
+                            className="px-1.5 py-0.5 rounded text-[11px] font-medium flex items-center gap-1"
                             style={{
                               background: 'var(--color-due-bg)',
                               color: 'var(--color-due)',
                             }}
                           >
-                            <AlertCircle size={12} /> Incomplete
-                          </span>
-                        )}
-
-                        {validation.isValid && (
-                          <span className="text-xs font-semibold ml-1" style={{ color: 'var(--color-brass)' }}>
-                            Net: {fmtKg(validation.netG / 1000)}
+                            <AlertCircle size={11} /> Incomplete
                           </span>
                         )}
                       </div>
@@ -673,19 +654,22 @@ export default function Receiving() {
                         <button
                           type="button"
                           onClick={() => removeBagRow(b.id)}
-                          className="text-xs font-medium inline-flex items-center gap-1 p-1 rounded cursor-pointer transition-colors"
+                          className="text-xs font-medium inline-flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity"
                           style={{ color: 'var(--color-due)' }}
                           title="Remove Bag"
                         >
-                          <Trash2 size={13} /> Remove Bag
+                          <Trash2 size={13} /> Remove
                         </button>
                       )}
                     </div>
 
-                    {/* Inputs & Calculations Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-start">
+                    {/* Inputs Row: Gross Weight & Rola Count */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
                       {/* 1. Gross Weight Input (grams) */}
-                      <Field label="Gross Weight (grams) *">
+                      <div>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-ink)' }}>
+                          Gross Weight (grams) *
+                        </label>
                         <TextInput
                           required
                           type="number"
@@ -703,7 +687,7 @@ export default function Receiving() {
                             updateBagField(b.id, 'grossGrams', val)
                           }}
                         />
-                        {showGrossError ? (
+                        {showGrossError && (
                           <span
                             className="text-xs font-medium mt-1 flex items-center gap-1"
                             style={{ color: 'var(--color-due)' }}
@@ -711,23 +695,26 @@ export default function Receiving() {
                             <AlertCircle size={11} className="shrink-0" />
                             {validation.grossError}
                           </span>
-                        ) : (
-                          <div className="flex items-center justify-between text-xs mt-0.5">
-                            <span style={{ color: 'var(--color-ink-soft)' }}>Enter in grams</span>
-                            {validation.grossG > 0 && (
-                              <span
-                                className="font-bold tabular-nums"
-                                style={{ color: 'var(--color-brass)' }}
-                              >
-                                = {fmtKg(validation.grossG / 1000)}
-                              </span>
-                            )}
-                          </div>
                         )}
-                      </Field>
+                      </div>
 
-                      {/* 2. Rola Count Input */}
-                      <Field label="Rola Count *">
+                      {/* 2. Rola Count Input + Change Default */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs font-semibold" style={{ color: 'var(--color-ink)' }}>
+                            Rola Count *
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowPerRola((prev) => ({ ...prev, [b.id]: !prev[b.id] }))
+                            }
+                            className="text-[11px] font-normal cursor-pointer hover:underline"
+                            style={{ color: 'var(--color-brass)' }}
+                          >
+                            {showPerRola[b.id] ? 'Done' : `change default (${b.perRolaGrams || rememberedPerRola}g)`}
+                          </button>
+                        </div>
                         <TextInput
                           required
                           type="number"
@@ -745,7 +732,7 @@ export default function Receiving() {
                             updateBagField(b.id, 'rolaCount', val)
                           }}
                         />
-                        {showRolaError ? (
+                        {showRolaError && (
                           <span
                             className="text-xs font-medium mt-1 flex items-center gap-1"
                             style={{ color: 'var(--color-due)' }}
@@ -753,31 +740,32 @@ export default function Receiving() {
                             <AlertCircle size={11} className="shrink-0" />
                             {validation.rolaError}
                           </span>
-                        ) : (
-                          <span className="text-xs mt-0.5" style={{ color: 'var(--color-ink-soft)' }}>
-                            Total pieces in bag
-                          </span>
                         )}
-                      </Field>
 
-                      {/* 3. Per Rola Weight Input */}
-                      <Field label="Per Rola Weight (g)">
-                        <TextInput
-                          type="number"
-                          inputMode="numeric"
-                          step="1"
-                          min="1"
-                          placeholder="e.g. 200"
-                          value={b.perRolaGrams}
-                          style={{
-                            borderColor: showPerRolaError ? 'var(--color-due)' : undefined,
-                          }}
-                          onBlur={() => markTouched(b.id, 'perRola')}
-                          onChange={(e) =>
-                            updateBagField(b.id, 'perRolaGrams', e.target.value)
-                          }
-                        />
-                        {showPerRolaError ? (
+                        {(showPerRola[b.id] || showPerRolaError) && (
+                          <div
+                            className="flex items-center gap-2 mt-2 p-2 rounded text-xs"
+                            style={{
+                              background: 'var(--color-paper)',
+                              border: '1px solid var(--color-border-soft)',
+                            }}
+                          >
+                            <span style={{ color: 'var(--color-ink-soft)' }}>Per rola weight:</span>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min="1"
+                              className="w-20 px-2 py-1 text-xs rounded border tabular-nums font-semibold bg-white"
+                              style={{ borderColor: 'var(--color-border)', color: 'var(--color-ink)' }}
+                              value={b.perRolaGrams}
+                              placeholder="200"
+                              onBlur={() => markTouched(b.id, 'perRola')}
+                              onChange={(e) => updateBagField(b.id, 'perRolaGrams', e.target.value)}
+                            />
+                            <span style={{ color: 'var(--color-ink-soft)' }}>g</span>
+                          </div>
+                        )}
+                        {showPerRolaError && (
                           <span
                             className="text-xs font-medium mt-1 flex items-center gap-1"
                             style={{ color: 'var(--color-due)' }}
@@ -785,90 +773,40 @@ export default function Receiving() {
                             <AlertCircle size={11} className="shrink-0" />
                             {validation.perRolaError}
                           </span>
-                        ) : (
-                          <div className="flex items-center justify-between text-xs mt-0.5">
-                            <span style={{ color: 'var(--color-ink-soft)' }}>Grams per rola</span>
-                            <span className="text-[11px] font-medium" style={{ color: 'var(--color-ink-soft)' }}>
-                              (default {rememberedPerRola}g)
-                            </span>
-                          </div>
                         )}
-                      </Field>
+                      </div>
+                    </div>
 
-                      {/* 4. Calculated Tare Weight */}
-                      <Field label="Tare Weight (calculated)">
-                        <div
-                          className="px-3 py-2 rounded-md text-sm font-semibold tabular-nums flex items-center justify-between min-h-[38px]"
-                          style={{
-                            background: isTareInvalid
-                              ? 'var(--color-due-bg)'
-                              : 'var(--color-paper)',
-                            border: `1px solid ${
-                              isTareInvalid ? 'var(--color-due)' : 'var(--color-border)'
-                            }`,
-                            color: isTareInvalid
-                              ? 'var(--color-due)'
-                              : 'var(--color-ink)',
-                          }}
-                        >
-                          <span>{fmtKg(validation.tareG / 1000)}</span>
-                          <span
-                            className="text-xs font-normal"
-                            style={{
-                              color: isTareInvalid
-                                ? 'var(--color-due)'
-                                : 'var(--color-ink-soft)',
-                            }}
+                    {/* Compact Result Line */}
+                    <div className="flex items-center justify-between text-xs mt-2 pt-0.5">
+                      <div className="flex items-center gap-2" style={{ color: 'var(--color-ink-soft)' }}>
+                        <span>
+                          Tare{' '}
+                          <strong className="font-semibold tabular-nums" style={{ color: 'var(--color-ink)' }}>
+                            {fmtKg(validation.tareG / 1000)}
+                          </strong>
+                        </span>
+                        <span>·</span>
+                        <span>
+                          Net{' '}
+                          <strong
+                            className="font-bold tabular-nums"
+                            style={{ color: validation.grossG > 0 ? 'var(--color-brass)' : 'var(--color-ink)' }}
                           >
-                            {validation.tareG.toLocaleString('en-IN')} g
-                          </span>
-                        </div>
-                        <span
-                          className="text-[11px] mt-0.5 block"
-                          style={{
-                            color: isTareInvalid ? 'var(--color-due)' : 'var(--color-ink-soft)',
-                          }}
-                        >
-                          {isTareInvalid
-                            ? validation.tareError
-                            : 'Rola Count × Per Rola'}
+                            {validation.grossG > 0 ? fmtKg(validation.netG / 1000) : '0.000 kg'}
+                          </strong>
                         </span>
-                      </Field>
+                      </div>
 
-                      {/* 5. Calculated Net Weight */}
-                      <Field label="Net Weight (calculated)">
-                        <div
-                          className="px-3 py-2 rounded-md text-sm font-bold tabular-nums flex items-center justify-between min-h-[38px]"
-                          style={{
-                            background: isTareInvalid
-                              ? 'var(--color-due-bg)'
-                              : validation.grossG > 0
-                              ? 'var(--color-border-soft)'
-                              : 'var(--color-paper)',
-                            border: `1px solid ${
-                              isTareInvalid ? 'var(--color-due)' : 'var(--color-border)'
-                            }`,
-                            color: isTareInvalid
-                              ? 'var(--color-due)'
-                              : validation.grossG > 0
-                              ? 'var(--color-brass)'
-                              : 'var(--color-ink-soft)',
-                          }}
+                      {isTareInvalid && (
+                        <span
+                          className="text-xs font-medium flex items-center gap-1"
+                          style={{ color: 'var(--color-due)' }}
                         >
-                          <span>{validation.grossG > 0 ? fmtKg(validation.netG / 1000) : '—'}</span>
-                          {validation.grossG > 0 && (
-                            <span
-                              className="text-xs font-normal"
-                              style={{ color: 'var(--color-ink-soft)' }}
-                            >
-                              {validation.netG.toLocaleString('en-IN')} g
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[11px] mt-0.5" style={{ color: 'var(--color-ink-soft)' }}>
-                          Gross − Tare
+                          <AlertCircle size={11} className="shrink-0" />
+                          {validation.tareError}
                         </span>
-                      </Field>
+                      )}
                     </div>
                   </div>
                 )
@@ -877,7 +815,7 @@ export default function Receiving() {
 
             {/* ONLY ONE Add Button: at the bottom of the bag list */}
             {!isEditing && (
-              <div className="mt-3.5">
+              <div className="mt-4">
                 <button
                   type="button"
                   onClick={addBagRow}
@@ -894,81 +832,35 @@ export default function Receiving() {
             )}
           </div>
 
-          {/* Batch Summary Box */}
+          {/* Compact Batch Summary Line */}
           <div
-            className="p-4 sm:p-5 rounded-xl mb-6 flex flex-col gap-3"
+            className="flex items-center justify-between flex-wrap gap-2 py-2.5 px-3.5 rounded-lg mb-5 text-xs"
             style={{
-              background: 'linear-gradient(135deg, #fbf9f5 0%, #f4eee1 100%)',
-              border: '1px solid var(--color-border)',
+              background: 'var(--color-paper)',
+              border: '1px solid var(--color-border-soft)',
             }}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--color-brass)' }}>
-                <Sparkles size={14} /> {isEditing ? 'Record Summary' : 'Batch Summary'}
+            <div className="flex items-center gap-2 font-medium" style={{ color: 'var(--color-ink-soft)' }}>
+              <span className="font-semibold" style={{ color: 'var(--color-ink)' }}>
+                {bags.length} {bags.length === 1 ? 'bag' : 'bags'}
               </span>
-              <span className="text-xs font-medium" style={{ color: 'var(--color-ink-soft)' }}>
-                Kasab: {header.color || '—'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
-              <div className="flex flex-col">
-                <span className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                  Total Bags
-                </span>
-                <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-ink)' }}>
-                  {bags.length}
-                </span>
-              </div>
-
-              <div className="flex flex-col">
-                <span className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                  Total Gross
-                </span>
-                <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-ink)' }}>
-                  {fmtKg(summary.totalGrossG / 1000)}
-                </span>
-                <span className="text-[11px]" style={{ color: 'var(--color-ink-soft)' }}>
-                  ({summary.totalGrossG.toLocaleString('en-IN')} g)
-                </span>
-              </div>
-
-              <div className="flex flex-col">
-                <span className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                  Total Rola
-                </span>
-                <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-ink)' }}>
-                  {summary.totalRola}
-                </span>
-              </div>
-
-              <div className="flex flex-col">
-                <span className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                  Total Tare
-                </span>
-                <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-ink)' }}>
-                  {fmtKg(summary.totalTareG / 1000)}
-                </span>
-                <span className="text-[11px]" style={{ color: 'var(--color-ink-soft)' }}>
-                  ({summary.totalTareG.toLocaleString('en-IN')} g)
-                </span>
-              </div>
-
-              <div className="flex flex-col col-span-2 sm:col-span-1">
-                <span className="text-xs font-semibold" style={{ color: 'var(--color-brass)' }}>
-                  Total Net
-                </span>
-                <span
-                  className="text-xl font-extrabold tabular-nums"
-                  style={{ color: 'var(--color-brass)' }}
-                >
+              <span>·</span>
+              <span>
+                <strong className="font-bold" style={{ color: 'var(--color-brass)' }}>
                   {fmtKg(summary.totalNetG / 1000)}
-                </span>
-                <span className="text-[11px] font-medium" style={{ color: 'var(--color-brass)' }}>
-                  ({summary.totalNetG.toLocaleString('en-IN')} g)
-                </span>
-              </div>
+                </strong>{' '}
+                net
+              </span>
+              <span>·</span>
+              <span className="font-medium" style={{ color: 'var(--color-ink)' }}>
+                {summary.totalRola} Rola
+              </span>
             </div>
+            {header.color && (
+              <span className="text-[11px]" style={{ color: 'var(--color-ink-soft)' }}>
+                Color: <strong style={{ color: 'var(--color-ink)' }}>{header.color}</strong>
+              </span>
+            )}
           </div>
 
           {/* Form Actions */}
@@ -1029,18 +921,6 @@ export default function Receiving() {
                   className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
                   style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
                 >
-                  Date
-                </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
-                  Party
-                </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
                   Color
                 </th>
                 <th
@@ -1060,12 +940,6 @@ export default function Receiving() {
                   style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
                 >
                   Net Wt (kg)
-                </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
-                  Challan #
                 </th>
                 <th
                   className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
@@ -1099,7 +973,7 @@ export default function Receiving() {
                         borderBottom: '1px solid var(--color-border-soft)',
                       }}
                     >
-                      <td colSpan={10} className="px-3 py-1.5 text-xs">
+                      <td colSpan={7} className="px-3 py-1.5 text-xs">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
                             {group.challanNo ? (
@@ -1114,13 +988,13 @@ export default function Receiving() {
                               </span>
                             ) : (
                               <span
-                                className="px-2 py-0.5 rounded text-[11px] font-medium"
+                                className="px-2 py-0.5 rounded text-xs font-semibold"
                                 style={{
                                   background: 'var(--color-paper)',
                                   color: 'var(--color-ink-soft)',
                                 }}
                               >
-                                Challan: —
+                                No Challan
                               </span>
                             )}
                             <span className="font-semibold" style={{ color: 'var(--color-ink)' }}>
@@ -1172,10 +1046,6 @@ export default function Receiving() {
                             Bag {bagIdx + 1}
                           </span>
                         </td>
-                        <td className="px-3 py-2 whitespace-nowrap">{fmtDate(r.date)}</td>
-                        <td className="px-3 py-2 font-medium whitespace-nowrap">
-                          {r.party?.name ?? '—'}
-                        </td>
                         <td className="px-3 py-2">{r.color || '—'}</td>
                         <td className="px-3 py-2 tabular-nums">{fmtKg(r.gross_weight)}</td>
                         <td className="px-3 py-2 tabular-nums">{fmtKg(r.tare_weight)}</td>
@@ -1185,7 +1055,6 @@ export default function Receiving() {
                         >
                           {fmtKg(r.net_weight)}
                         </td>
-                        <td className="px-3 py-2 font-medium">{r.challan_no || '—'}</td>
                         <td className="px-3 py-2 tabular-nums">{r.rola_count || 0}</td>
                         <td className="px-3 py-2 text-right whitespace-nowrap">
                           <button
