@@ -157,11 +157,27 @@ export function fmtMoney(n: number | null | undefined): string {
   return `₹${(Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 }
 
-export const fmtINR = fmtMoney
-
-/** Format weight with 2 decimal places: 11.75 kg */
+/** Format weight with 3 decimal places: 23.535 kg */
 export function fmtKg(n: number | null | undefined): string {
-  return `${(Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })} kg`
+  if (n === null || n === undefined) return '—'
+  const val = Number(n) || 0
+  return `${val.toFixed(3)} kg`
+}
+
+/** Convert kg to whole-number grams string for form inputs (e.g. 23.535 -> "23535") */
+export function kgToGrams(kg: number | string | null | undefined): string {
+  if (kg === null || kg === undefined || kg === '') return ''
+  const val = typeof kg === 'string' ? parseFloat(kg) : kg
+  if (isNaN(val)) return ''
+  return String(Math.round(val * 1000))
+}
+
+/** Convert whole-number grams to kg number (e.g. 23535 -> 23.535) */
+export function gramsToKg(grams: number | string | null | undefined): number {
+  if (grams === null || grams === undefined || grams === '') return 0
+  const val = typeof grams === 'string' ? parseFloat(grams) : grams
+  if (isNaN(val) || val < 0) return 0
+  return val / 1000
 }
 
 /** Check if date is in current month */

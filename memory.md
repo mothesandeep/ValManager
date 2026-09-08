@@ -34,12 +34,10 @@ Resolve these with Papa/Sandeep before or during Phase 0 — they affect the sch
 
 ## Ideas for Later (explicitly not v1 — see PRD §3)
 
-*(empty — nothing deferred yet; add here if something comes up mid-build that shouldn't be built now)*
-
 ## Session Log
 
 | Date | What happened |
 |---|---|
 | — | PRD, architecture, design, Phase plan, agent.md, rules.md, memory.md written. Prototype (`kasab-val-manager.jsx`) already existed and validated the UI/module structure before these docs were written. |
-
-*(Add a new row each session: date, what was built/decided, what's left. Keep entries short — this is a log, not a diary.)*
+| 8 Sep 2026 | **Phases 1–3 & UI Revamp:** Connected Supabase, implemented all 9 modules with real-time CRUD and balance calculations, updated UI to match reference design tokens, verified build, and pushed repository to GitHub (`mothesandeep/Kasab-Val-Manager`). |
+| 8 Sep 2026 | **Receiving Weight Grams Input Fix:** Updated Receiving form Gross Weight and Tare Weight fields to accept whole-number grams without manual decimal points (e.g. `23535` → `23.535 kg`, `12500` → `12.500 kg`, `750` → `0.750 kg`). Implemented live `= X.XXX kg` badges, `grossGrams - tareGrams` Net Weight computation, `tare >= gross` validation, and full edit-flow compatibility (`kgToGrams`) with existing records. |

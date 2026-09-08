@@ -9,7 +9,7 @@ import {
   type ReceiptPayload,
 } from '../lib/queries'
 import type { Party, ReceiptWithParty } from '../types'
-import { COLOR_TYPES, fmtDate, fmtKg, todayStr } from '../types'
+import { COLOR_TYPES, fmtDate, fmtKg, kgToGrams, todayStr } from '../types'
 import {
   SectionHeader,
   Button,
@@ -26,8 +26,8 @@ interface ReceiptFormState {
   partyId: string
   date: string
   color: string
-  grossWeight: string
-  tareWeight: string
+  grossWeightGrams: string
+  tareWeightGrams: string
   challanNo: string
   rolaCount: string
 }
@@ -68,8 +68,8 @@ export default function Receiving() {
     partyId: initialPartyId || parties[0]?.id || '',
     date: todayStr(),
     color: 'Gold',
-    grossWeight: '',
-    tareWeight: '0',
+    grossWeightGrams: '',
+    tareWeightGrams: '0',
     challanNo: '',
     rolaCount: '0',
   })
@@ -86,10 +86,10 @@ export default function Receiving() {
       partyId: r.party_id || '',
       date: r.date,
       color: r.color || 'Gold',
-      grossWeight: String(r.gross_weight),
-      tareWeight: String(r.tare_weight),
+      grossWeightGrams: kgToGrams(r.gross_weight),
+      tareWeightGrams: kgToGrams(r.tare_weight),
       challanNo: r.challan_no || '',
-      rolaCount: String(r.rola_count),
+      rolaCount: String(r.rola_count ?? 0),
     })
     setErrorMsg(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -97,26 +97,50 @@ export default function Receiving() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form || !form.partyId || !form.grossWeight) return
+    if (!form) return
 
-    const gross = parseFloat(form.grossWeight)
-    const tare = parseFloat(form.tareWeight) || 0
-    if (isNaN(gross) || gross <= 0) {
-      setErrorMsg('Please enter a valid gross weight')
+    if (!form.partyId) {
+      setErrorMsg('Please select a party')
+      return
+    }
+
+    if (!form.grossWeightGrams.trim()) {
+      setErrorMsg('Please enter gross weight in grams (e.g. 23535 for 23.535 kg)')
+      return
+    }
+
+    const grossG = parseInt(form.grossWeightGrams, 10)
+    if (isNaN(grossG) || grossG <= 0) {
+      setErrorMsg('Gross weight must be a valid positive number in grams (e.g. 23535)')
+      return
+    }
+
+    const tareG = form.tareWeightGrams.trim() ? parseInt(form.tareWeightGrams, 10) : 0
+    if (isNaN(tareG) || tareG < 0) {
+      setErrorMsg('Tare weight must be 0 or a positive number in grams')
+      return
+    }
+
+    if (tareG >= grossG) {
+      setErrorMsg('Tare weight cannot be greater than or equal to gross weight')
       return
     }
 
     setSaving(true)
     setErrorMsg(null)
 
+    // Convert whole-number grams to standard kg (e.g. 23535g -> 23.535 kg)
+    const grossKg = grossG / 1000
+    const tareKg = tareG / 1000
+
     const payload: ReceiptPayload = {
       party_id: form.partyId,
       date: form.date,
       color: form.color || null,
-      gross_weight: gross,
-      tare_weight: tare,
+      gross_weight: grossKg,
+      tare_weight: tareKg,
       challan_no: form.challanNo.trim() || null,
-      rola_count: parseInt(form.rolaCount) || 0,
+      rola_count: parseInt(form.rolaCount, 10) || 0,
     }
 
     try {
@@ -148,9 +172,13 @@ export default function Receiving() {
     }
   }
 
-  const netPreview = form
-    ? Math.max(0, (Number(form.grossWeight) || 0) - (Number(form.tareWeight) || 0))
-    : 0
+  // Live calculation of kg previews
+  const grossGramsNum = form && form.grossWeightGrams.trim() ? parseInt(form.grossWeightGrams, 10) : null
+  const tareGramsNum = form && form.tareWeightGrams.trim() ? parseInt(form.tareWeightGrams, 10) : 0
+  
+  const grossKgPreview = grossGramsNum !== null && !isNaN(grossGramsNum) && grossGramsNum >= 0 ? grossGramsNum / 1000 : null
+  const tareKgPreview = tareGramsNum !== null && !isNaN(tareGramsNum) && tareGramsNum >= 0 ? tareGramsNum / 1000 : 0
+  const netKgPreview = grossKgPreview !== null ? Math.max(0, grossKgPreview - tareKgPreview) : null
 
   return (
     <div>
@@ -190,7 +218,7 @@ export default function Receiving() {
       {form && (
         <form
           onSubmit={submit}
-          className="mb-5 p-4 rounded-lg grid grid-cols-2 sm:grid-cols-3 gap-3"
+          className="mb-5 p-4 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5"
           style={{
             background: 'var(--color-card)',
             border: '1px solid var(--color-border)',
@@ -232,34 +260,75 @@ export default function Receiving() {
             </Select>
           </Field>
 
-          <Field label="Gross Weight (kg) *">
+          {/* Gross Weight input in grams */}
+          <Field label="Gross Weight (grams) *">
             <TextInput
               required
               type="number"
-              step="0.001"
-              placeholder="e.g. 12.500"
-              value={form.grossWeight}
-              onChange={(e) => setForm({ ...form, grossWeight: e.target.value })}
+              inputMode="numeric"
+              step="1"
+              min="0"
+              placeholder="e.g. 23535"
+              value={form.grossWeightGrams}
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^0-9]/g, '')
+                setForm({ ...form, grossWeightGrams: val })
+              }}
             />
+            <div className="flex items-center justify-between text-xs mt-0.5">
+              <span style={{ color: 'var(--color-ink-soft)' }}>Enter weight in grams</span>
+              {grossKgPreview !== null && (
+                <span className="font-semibold tabular-nums" style={{ color: 'var(--color-brass)' }}>
+                  = {fmtKg(grossKgPreview)}
+                </span>
+              )}
+            </div>
           </Field>
 
-          <Field label="Tare / Rola Weight (kg)">
+          {/* Tare / Rola Weight input in grams */}
+          <Field label="Tare / Rola Weight (grams)">
             <TextInput
               type="number"
-              step="0.001"
-              placeholder="e.g. 0.750"
-              value={form.tareWeight}
-              onChange={(e) => setForm({ ...form, tareWeight: e.target.value })}
+              inputMode="numeric"
+              step="1"
+              min="0"
+              placeholder="e.g. 750"
+              value={form.tareWeightGrams}
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^0-9]/g, '')
+                setForm({ ...form, tareWeightGrams: val })
+              }}
             />
+            <div className="flex items-center justify-between text-xs mt-0.5">
+              <span style={{ color: 'var(--color-ink-soft)' }}>Enter weight in grams</span>
+              {tareKgPreview > 0 && (
+                <span className="font-semibold tabular-nums" style={{ color: 'var(--color-ink-soft)' }}>
+                  = {fmtKg(tareKgPreview)}
+                </span>
+              )}
+            </div>
           </Field>
 
-          <Field label="Net Weight">
+          {/* Net Weight Display (Auto-calculated in kg) */}
+          <Field label="Net Weight (calculated)">
             <div
-              className="px-3 py-2 rounded-md text-sm font-semibold tabular-nums flex items-center min-h-[38px]"
-              style={{ background: 'var(--color-border-soft)' }}
+              className="px-3 py-2 rounded-md text-sm font-semibold tabular-nums flex items-center justify-between min-h-[38px]"
+              style={{
+                background: netKgPreview !== null ? 'var(--color-border-soft)' : 'var(--color-paper)',
+                border: '1px solid var(--color-border)',
+                color: netKgPreview !== null ? 'var(--color-ink)' : 'var(--color-ink-soft)',
+              }}
             >
-              {fmtKg(netPreview)}
+              <span>{netKgPreview !== null ? fmtKg(netKgPreview) : '—'}</span>
+              {netKgPreview !== null && grossGramsNum !== null && (
+                <span className="text-xs font-normal" style={{ color: 'var(--color-ink-soft)' }}>
+                  ({Math.max(0, grossGramsNum - tareGramsNum)} g)
+                </span>
+              )}
             </div>
+            <span className="text-[11px] mt-0.5" style={{ color: 'var(--color-ink-soft)' }}>
+              = Gross − Tare
+            </span>
           </Field>
 
           <Field label="Challan Number">
@@ -273,15 +342,18 @@ export default function Receiving() {
           <Field label="Rola Count">
             <TextInput
               type="number"
+              inputMode="numeric"
+              step="1"
+              min="0"
               placeholder="e.g. 12"
               value={form.rolaCount}
               onChange={(e) => setForm({ ...form, rolaCount: e.target.value })}
             />
           </Field>
 
-          <div className="flex gap-2 items-end col-span-2 sm:col-span-1 pt-1">
-            <Button type="submit" disabled={saving}>
-              <Check size={16} /> {saving ? 'Saving…' : 'Save'}
+          <div className="flex gap-2 items-end pt-1 sm:col-span-2 lg:col-span-1">
+            <Button type="submit" disabled={saving} className="flex-1 sm:flex-none">
+              <Check size={16} /> {saving ? 'Saving…' : 'Save Receipt'}
             </Button>
             <Button
               type="button"
@@ -297,7 +369,7 @@ export default function Receiving() {
 
       {/* ── Table View ───────────────────────────────────────────── */}
       <Table
-        columns={['Date', 'Party', 'Color', 'Gross', 'Tare', 'Net Wt', 'Challan #', 'Rola', '']}
+        columns={['Date', 'Party', 'Color', 'Gross (kg)', 'Tare (kg)', 'Net Wt (kg)', 'Challan #', 'Rola', '']}
         rows={receipts}
         emptyText="No receiving entries yet."
         renderRow={(r) => (
@@ -312,7 +384,9 @@ export default function Receiving() {
             <td className="px-3 py-2">{r.color || '—'}</td>
             <td className="px-3 py-2 tabular-nums">{fmtKg(r.gross_weight)}</td>
             <td className="px-3 py-2 tabular-nums">{fmtKg(r.tare_weight)}</td>
-            <td className="px-3 py-2 tabular-nums font-semibold">{fmtKg(r.net_weight)}</td>
+            <td className="px-3 py-2 tabular-nums font-semibold" style={{ color: 'var(--color-brass)' }}>
+              {fmtKg(r.net_weight)}
+            </td>
             <td className="px-3 py-2">{r.challan_no || '—'}</td>
             <td className="px-3 py-2 tabular-nums">{r.rola_count || 0}</td>
             <td className="px-3 py-2 text-right whitespace-nowrap">
