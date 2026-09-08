@@ -65,6 +65,12 @@ export async function insertReceipt(payload: ReceiptPayload): Promise<void> {
   if (error) throw error
 }
 
+export async function insertReceipts(payloads: ReceiptPayload[]): Promise<void> {
+  if (!payloads.length) return
+  const { error } = await supabase.from('receipts').insert(payloads)
+  if (error) throw error
+}
+
 export async function updateReceipt(
   id: string,
   payload: ReceiptPayload
