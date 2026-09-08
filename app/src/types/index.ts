@@ -62,11 +62,15 @@ export interface Dispatch {
   id: string
   party_id: string | null
   date: string
+  dispatch_type?: 'Val' | 'Kali' | string | null
+  challan_no?: string | null
   bungari_count: number
+  bungari_weight_g?: number | null
   bore_gross_weight: number
   net_val_weight: number | null
   rate_per_kg: number | null
   amount: number | null
+  rola_count?: number | null
   created_at: string
 }
 

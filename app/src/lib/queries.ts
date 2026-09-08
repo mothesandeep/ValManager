@@ -141,6 +141,12 @@ export async function insertDispatch(payload: DispatchPayload): Promise<void> {
   if (error) throw error
 }
 
+export async function insertDispatches(payloads: DispatchPayload[]): Promise<void> {
+  if (!payloads.length) return
+  const { error } = await supabase.from('dispatches').insert(payloads)
+  if (error) throw error
+}
+
 export async function updateDispatch(
   id: string,
   payload: DispatchPayload
