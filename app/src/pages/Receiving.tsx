@@ -905,15 +905,25 @@ export default function Receiving() {
         <EmptyState text="No receiving entries yet." />
       ) : (
         <div
-          className="overflow-x-auto rounded-lg bg-white shadow-sm"
-          style={{ border: '1px solid var(--color-border)' }}
+          className="overflow-x-auto rounded-xl shadow-xs"
+          style={{ background: 'var(--color-paper)' }}
         >
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr style={{ background: 'var(--color-border-soft)' }}>
+              <tr
+                style={{
+                  background: 'var(--color-border-soft)',
+                  borderTop: '1px solid var(--color-border)',
+                  borderBottom: '1.5px solid var(--color-border)',
+                }}
+              >
                 <th
                   className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
+                  style={{
+                    color: 'var(--color-ink-soft)',
+                    fontSize: '0.75rem',
+                    borderLeft: '1px solid var(--color-border)',
+                  }}
                 >
                   Bag #
                 </th>
@@ -949,7 +959,11 @@ export default function Receiving() {
                 </th>
                 <th
                   className="text-right px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
+                  style={{
+                    color: 'var(--color-ink-soft)',
+                    fontSize: '0.75rem',
+                    borderRight: '1px solid var(--color-border)',
+                  }}
                 >
                   Actions
                 </th>
@@ -957,67 +971,92 @@ export default function Receiving() {
             </thead>
             <tbody>
               {challanGroups.map((group, groupIdx) => {
-                // Alternating visual treatment per CHALLAN GROUP
-                const groupBg = groupIdx % 2 === 0 ? '#ffffff' : '#fcfbf7'
+                // Alternating background per WHOLE CHALLAN GROUP
+                const groupBagBg = groupIdx % 2 === 0 ? '#FFFFFF' : '#FAF7F0'
 
                 return (
                   <Fragment key={group.id}>
-                    {/* Group Subheader Strip (Shows when Challan exists or multiple bags in batch) */}
+                    {/* Vertical spacing (18px margin) between consecutive challan groups */}
+                    {groupIdx > 0 && (
+                      <tr aria-hidden="true" style={{ border: 'none' }}>
+                        <td
+                          colSpan={7}
+                          style={{
+                            height: '18px',
+                            padding: 0,
+                            border: 'none',
+                            background: 'var(--color-paper)',
+                          }}
+                        />
+                      </tr>
+                    )}
+
+                    {/* Group Header Strip: distinctly darker/warmer than table header, heavier typography */}
                     <tr
                       style={{
-                        background:
-                          groupIdx % 2 === 0
-                            ? 'rgba(0,0,0,0.015)'
-                            : 'rgba(197, 160, 89, 0.06)',
-                        borderTop: groupIdx > 0 ? '2px solid var(--color-border)' : 'none',
-                        borderBottom: '1px solid var(--color-border-soft)',
+                        background: '#DECDB0',
+                        borderTop: '1px solid #C8B693',
+                        borderBottom: '1px solid #C8B693',
                       }}
                     >
-                      <td colSpan={7} className="px-3 py-1.5 text-xs">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2">
+                      <td
+                        colSpan={7}
+                        className="px-3.5 py-2.5 text-xs"
+                        style={{
+                          borderLeft: '4px solid #A6752B',
+                          borderRight: '1px solid #C8B693',
+                        }}
+                      >
+                        <div className="flex items-center justify-between flex-wrap gap-2.5">
+                          <div className="flex items-center gap-2.5">
                             {group.challanNo ? (
                               <span
-                                className="px-2 py-0.5 rounded font-bold text-xs tracking-wide"
+                                className="px-2.5 py-1 rounded font-bold text-sm tracking-wide shadow-xs inline-flex items-center gap-1"
                                 style={{
-                                  background: 'var(--color-border-soft)',
-                                  color: 'var(--color-ink)',
+                                  background: 'var(--color-ink)',
+                                  color: '#FAF7F0',
                                 }}
                               >
                                 Challan #{group.challanNo}
                               </span>
                             ) : (
                               <span
-                                className="px-2 py-0.5 rounded text-xs font-semibold"
+                                className="px-2.5 py-1 rounded font-bold text-xs tracking-wide uppercase inline-flex items-center"
                                 style={{
-                                  background: 'var(--color-paper)',
-                                  color: 'var(--color-ink-soft)',
+                                  background: 'rgba(36, 31, 25, 0.12)',
+                                  color: 'var(--color-ink)',
                                 }}
                               >
                                 No Challan
                               </span>
                             )}
-                            <span className="font-semibold" style={{ color: 'var(--color-ink)' }}>
+                            <span className="font-bold text-sm" style={{ color: 'var(--color-ink)' }}>
                               {group.partyName}
                             </span>
-                            <span style={{ color: 'var(--color-ink-soft)' }}>
+                            <span className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
                               • {fmtDate(group.date)}
                             </span>
-                            <span style={{ color: 'var(--color-ink-soft)' }}>
-                              • {group.receipts.length} {group.receipts.length === 1 ? 'Bag' : 'Bags'}
+                            <span
+                              className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                              style={{
+                                background: 'rgba(36, 31, 25, 0.08)',
+                                color: 'var(--color-ink)',
+                              }}
+                            >
+                              {group.receipts.length} {group.receipts.length === 1 ? 'Bag' : 'Bags'}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-3 text-[11px]" style={{ color: 'var(--color-ink-soft)' }}>
+                          <div className="flex items-center gap-4 text-xs font-medium" style={{ color: 'var(--color-ink)' }}>
                             <span>
                               Batch Net:{' '}
-                              <strong className="font-bold" style={{ color: 'var(--color-brass)' }}>
+                              <strong className="font-extrabold text-sm tabular-nums" style={{ color: 'var(--color-brass-dark)' }}>
                                 {fmtKg(group.totalNet)}
                               </strong>
                             </span>
                             <span>
                               Total Rola:{' '}
-                              <strong className="font-semibold" style={{ color: 'var(--color-ink)' }}>
+                              <strong className="font-bold text-sm tabular-nums">
                                 {group.totalRola}
                               </strong>
                             </span>
@@ -1027,66 +1066,81 @@ export default function Receiving() {
                     </tr>
 
                     {/* Individual Bag Rows belonging to this group */}
-                    {group.receipts.map((r, bagIdx) => (
-                      <tr
-                        key={r.id}
-                        style={{
-                          background: groupBg,
-                          borderTop: bagIdx > 0 ? '1px solid var(--color-border-soft)' : 'none',
-                        }}
-                      >
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <span
-                            className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                    {group.receipts.map((r, bagIdx) => {
+                      const isLastBag = bagIdx === group.receipts.length - 1
+
+                      return (
+                        <tr
+                          key={r.id}
+                          style={{
+                            background: groupBagBg,
+                            borderTop: '1px solid var(--color-border-soft)',
+                            borderBottom: isLastBag ? '1px solid var(--color-border)' : undefined,
+                          }}
+                        >
+                          <td
+                            className="px-3.5 py-2.5 whitespace-nowrap"
                             style={{
-                              background: 'var(--color-border-soft)',
-                              color: 'var(--color-ink)',
+                              borderLeft: '4px solid #A6752B',
                             }}
                           >
-                            Bag {bagIdx + 1}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">{r.color || '—'}</td>
-                        <td className="px-3 py-2 tabular-nums">{fmtKg(r.gross_weight)}</td>
-                        <td className="px-3 py-2 tabular-nums">{fmtKg(r.tare_weight)}</td>
-                        <td
-                          className="px-3 py-2 tabular-nums font-semibold"
-                          style={{ color: 'var(--color-brass)' }}
-                        >
-                          {fmtKg(r.net_weight)}
-                        </td>
-                        <td className="px-3 py-2 tabular-nums">{r.rola_count || 0}</td>
-                        <td className="px-3 py-2 text-right whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => editReceipt(r)}
-                            className="p-1 cursor-pointer hover:opacity-75 transition-opacity"
-                            style={{ color: 'var(--color-ink-soft)' }}
-                            title="Edit bag entry"
-                            aria-label="Edit bag entry"
+                            <span
+                              className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                              style={{
+                                background: 'var(--color-border-soft)',
+                                color: 'var(--color-ink)',
+                              }}
+                            >
+                              Bag {bagIdx + 1}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">{r.color || '—'}</td>
+                          <td className="px-3 py-2.5 tabular-nums">{fmtKg(r.gross_weight)}</td>
+                          <td className="px-3 py-2.5 tabular-nums">{fmtKg(r.tare_weight)}</td>
+                          <td
+                            className="px-3 py-2.5 tabular-nums font-bold"
+                            style={{ color: 'var(--color-brass)' }}
                           >
-                            <Pencil size={14} />
-                          </button>
-                          {deleting === r.id ? (
-                            <ConfirmDelete
-                              onConfirm={() => handleDelete(r.id)}
-                              onCancel={() => setDeleting(null)}
-                            />
-                          ) : (
+                            {fmtKg(r.net_weight)}
+                          </td>
+                          <td className="px-3 py-2.5 tabular-nums font-medium">{r.rola_count || 0}</td>
+                          <td
+                            className="px-3 py-2.5 text-right whitespace-nowrap"
+                            style={{
+                              borderRight: '1px solid var(--color-border)',
+                            }}
+                          >
                             <button
                               type="button"
-                              onClick={() => setDeleting(r.id)}
+                              onClick={() => editReceipt(r)}
                               className="p-1 cursor-pointer hover:opacity-75 transition-opacity"
-                              style={{ color: 'var(--color-due)' }}
-                              title="Delete bag entry"
-                              aria-label="Delete bag entry"
+                              style={{ color: 'var(--color-ink-soft)' }}
+                              title="Edit bag entry"
+                              aria-label="Edit bag entry"
                             >
-                              <Trash2 size={14} />
+                              <Pencil size={14} />
                             </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                            {deleting === r.id ? (
+                              <ConfirmDelete
+                                onConfirm={() => handleDelete(r.id)}
+                                onCancel={() => setDeleting(null)}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setDeleting(r.id)}
+                                className="p-1 cursor-pointer hover:opacity-75 transition-opacity"
+                                style={{ color: 'var(--color-due)' }}
+                                title="Delete bag entry"
+                                aria-label="Delete bag entry"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </Fragment>
                 )
               })}
