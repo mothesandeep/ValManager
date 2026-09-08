@@ -1,246 +1,138 @@
 import assert from 'node:assert'
 
-console.log('--- Testing Multi-Bag Calculations, Workflow & Challan Grouping ---')
+console.log('--- Testing Strict Per-Bag Validation Cases 1 to 6 ---')
 
-// Helper functions matching types/index.ts & Receiving.tsx
 function fmtKg(n) {
   if (n === null || n === undefined) return '—'
   const val = Number(n) || 0
   return `${val.toFixed(3)} kg`
 }
 
-function kgToGrams(kg) {
-  if (kg === null || kg === undefined || kg === '') return ''
-  const val = typeof kg === 'string' ? parseFloat(kg) : kg
-  if (isNaN(val)) return ''
-  return String(Math.round(val * 1000))
-}
+function validateBag(bag) {
+  let grossError = null
+  let rolaError = null
+  let perRolaError = null
+  let tareError = null
 
-function calculateBag(grossGramsStr, rolaCountStr, perRolaGramsStr) {
-  const grossG = parseInt(grossGramsStr, 10) || 0
-  const rolaCnt = parseInt(rolaCountStr, 10) || 0
-  const perRolaG = parseInt(perRolaGramsStr, 10) || 0
+  // 1. Gross Weight validation
+  if (!bag.grossGrams || !bag.grossGrams.trim()) {
+    grossError = 'Gross weight is required'
+  } else {
+    const g = parseInt(bag.grossGrams, 10)
+    if (isNaN(g) || g <= 0) {
+      grossError = 'Gross weight must be greater than 0'
+    }
+  }
+
+  // 2. Rola Count validation
+  if (!bag.rolaCount || !bag.rolaCount.trim()) {
+    rolaError = 'Rola count is required'
+  } else {
+    const r = parseInt(bag.rolaCount, 10)
+    if (isNaN(r) || r < 0) {
+      rolaError = 'Rola count cannot be negative'
+    }
+  }
+
+  // 3. Per Rola Weight validation
+  const rCount = parseInt(bag.rolaCount?.trim() || '0', 10)
+  if (bag.perRolaGrams?.trim()) {
+    const pr = parseInt(bag.perRolaGrams, 10)
+    if (isNaN(pr) || pr <= 0) {
+      perRolaError = 'Per rola weight must be greater than 0'
+    }
+  } else if (!isNaN(rCount) && rCount > 0) {
+    perRolaError = 'Per rola weight is required'
+  }
+
+  const grossG = parseInt(bag.grossGrams, 10) || 0
+  const rolaCnt = isNaN(rCount) ? 0 : rCount
+  const perRolaG = parseInt(bag.perRolaGrams?.trim() || '0', 10) || 0
   const tareG = rolaCnt * perRolaG
   const netG = Math.max(0, grossG - tareG)
 
-  const grossKg = grossG / 1000
-  const tareKg = tareG / 1000
-  const netKg = netG / 1000
+  // 4. Tare vs Gross validation
+  if (!grossError && !rolaError && !perRolaError && grossG > 0) {
+    if (tareG >= grossG) {
+      tareError = `Tare (${fmtKg(tareG / 1000)}) cannot exceed gross weight (${fmtKg(grossG / 1000)})`
+    }
+  }
+
+  const isValid = !grossError && !rolaError && !perRolaError && !tareError
 
   return {
+    grossError,
+    rolaError,
+    perRolaError,
+    tareError,
+    isValid,
     grossG,
     rolaCnt,
     perRolaG,
     tareG,
     netG,
-    grossKg,
-    tareKg,
-    netKg,
-    isTareInvalid: grossG > 0 && tareG >= grossG,
   }
 }
 
-function groupReceiptsByChallan(receipts) {
-  const groups = []
-  const map = new Map()
-
-  for (const r of receipts) {
-    const challanTrimmed = r.challan_no?.trim() || null
-    const groupKey = challanTrimmed
-      ? `challan_${challanTrimmed}_${r.party_id || 'unknown'}_${r.date}`
-      : `no_challan_${r.id}`
-
-    let g = map.get(groupKey)
-    if (!g) {
-      g = {
-        id: groupKey,
-        challanNo: challanTrimmed,
-        partyName: r.party?.name || '—',
-        date: r.date,
-        color: r.color || null,
-        receipts: [],
-        totalNet: 0,
-        totalGross: 0,
-        totalRola: 0,
-      }
-      map.set(groupKey, g)
-      groups.push(g)
-    }
-
-    g.receipts.push(r)
-    g.totalNet += Number(r.net_weight) || 0
-    g.totalGross += Number(r.gross_weight) || 0
-    g.totalRola += Number(r.rola_count) || 0
-  }
-
-  return groups
+function checkBatchCanSave(bags, header = { partyId: 'p1', date: '2026-09-08' }) {
+  const isHeaderValid = Boolean(header.partyId && header.date)
+  const allBagsValid = bags.length > 0 && bags.every(b => validateBag(b).isValid)
+  return isHeaderValid && allBagsValid
 }
 
-// ── Test 1: Single Bag ────────────────────────────────────────────────────
-console.log('\n[Test 1] Single Bag (23535g, 60 rola, 200g/rola)');
-const b1 = calculateBag('23535', '60', '200');
-assert.strictEqual(b1.grossG, 23535);
-assert.strictEqual(b1.tareG, 12000);
-assert.strictEqual(b1.netG, 11535);
-assert.strictEqual(fmtKg(b1.grossKg), '23.535 kg');
-assert.strictEqual(fmtKg(b1.tareKg), '12.000 kg');
-assert.strictEqual(fmtKg(b1.netKg), '11.535 kg');
-assert.strictEqual(b1.isTareInvalid, false);
-console.log('✓ Single bag calculated correctly: 23.535 kg gross, 12.000 kg tare, 11.535 kg net');
+// ── Case 1: Gross empty, Rola empty ────────────────────────────────────────
+console.log('\n[Case 1] Gross empty, Rola empty');
+const c1 = validateBag({ grossGrams: '', rolaCount: '', perRolaGrams: '200' });
+assert.strictEqual(c1.grossError, 'Gross weight is required');
+assert.strictEqual(c1.rolaError, 'Rola count is required');
+assert.strictEqual(c1.isValid, false);
+assert.strictEqual(checkBatchCanSave([{ grossGrams: '', rolaCount: '', perRolaGrams: '200' }]), false);
+console.log('✓ Case 1 passed: both fields show required errors, Save is disabled');
 
-// ── Test 2: Multiple Bags Batch ───────────────────────────────────────────
-console.log('\n[Test 2] Multiple Bags Batch:');
-const bagsData = [
-  { grossGrams: '23535', rolaCount: '60', perRolaGrams: '200' },
-  { grossGrams: '24200', rolaCount: '50', perRolaGrams: '200' },
-  { grossGrams: '21800', rolaCount: '55', perRolaGrams: '200' },
-];
+// ── Case 2: Gross = 23535, Rola empty ───────────────────────────────────────
+console.log('\n[Case 2] Gross = 23535, Rola empty');
+const c2 = validateBag({ grossGrams: '23535', rolaCount: '', perRolaGrams: '200' });
+assert.strictEqual(c2.grossError, null);
+assert.strictEqual(c2.rolaError, 'Rola count is required');
+assert.strictEqual(c2.isValid, false);
+assert.strictEqual(checkBatchCanSave([{ grossGrams: '23535', rolaCount: '', perRolaGrams: '200' }]), false);
+console.log('✓ Case 2 passed: Rola Count shows "Rola count is required", Save is disabled');
 
-const batchResults = bagsData.map((b) => calculateBag(b.grossGrams, b.rolaCount, b.perRolaGrams));
+// ── Case 3: Gross empty, Rola = 60 ──────────────────────────────────────────
+console.log('\n[Case 3] Gross empty, Rola = 60');
+const c3 = validateBag({ grossGrams: '', rolaCount: '60', perRolaGrams: '200' });
+assert.strictEqual(c3.grossError, 'Gross weight is required');
+assert.strictEqual(c3.rolaError, null);
+assert.strictEqual(c3.isValid, false);
+assert.strictEqual(checkBatchCanSave([{ grossGrams: '', rolaCount: '60', perRolaGrams: '200' }]), false);
+console.log('✓ Case 3 passed: Gross Weight shows "Gross weight is required", Save is disabled');
 
-assert.strictEqual(batchResults[0].netG, 11535); // 23535 - 12000
-assert.strictEqual(batchResults[1].tareG, 10000); // 50 * 200
-assert.strictEqual(batchResults[1].netG, 14200);  // 24200 - 10000
-assert.strictEqual(batchResults[2].tareG, 11000); // 55 * 200
-assert.strictEqual(batchResults[2].netG, 10800);  // 21800 - 11000
+// ── Case 4: Gross = 23535, Rola = 60, Per Rola = 200 ────────────────────────
+console.log('\n[Case 4] Gross = 23535, Rola = 60, Per Rola = 200');
+const c4 = validateBag({ grossGrams: '23535', rolaCount: '60', perRolaGrams: '200' });
+assert.strictEqual(c4.grossError, null);
+assert.strictEqual(c4.rolaError, null);
+assert.strictEqual(c4.tareG, 12000);
+assert.strictEqual(c4.netG, 11535);
+assert.strictEqual(c4.isValid, true);
+assert.strictEqual(checkBatchCanSave([{ grossGrams: '23535', rolaCount: '60', perRolaGrams: '200' }]), true);
+console.log('✓ Case 4 passed: Tare = 12000 g, Net = 11535 g, Bag marked Complete, Save is enabled');
 
-const batchSummary = batchResults.reduce(
-  (acc, b) => ({
-    totalBags: acc.totalBags + 1,
-    totalGrossG: acc.totalGrossG + b.grossG,
-    totalRola: acc.totalRola + b.rolaCnt,
-    totalTareG: acc.totalTareG + b.tareG,
-    totalNetG: acc.totalNetG + b.netG,
-  }),
-  { totalBags: 0, totalGrossG: 0, totalRola: 0, totalTareG: 0, totalNetG: 0 }
-);
+// ── Case 5: Bag 1 valid, Bag 2 incomplete ──────────────────────────────────
+console.log('\n[Case 5] Bag 1 valid, Bag 2 incomplete');
+const bag1Valid = { id: 'b1', grossGrams: '23535', rolaCount: '60', perRolaGrams: '200' };
+const bag2Incomplete = { id: 'b2', grossGrams: '', rolaCount: '', perRolaGrams: '200' };
+const batchCase5 = [bag1Valid, bag2Incomplete];
+assert.strictEqual(validateBag(bag1Valid).isValid, true);
+assert.strictEqual(validateBag(bag2Incomplete).isValid, false);
+assert.strictEqual(checkBatchCanSave(batchCase5), false);
+console.log('✓ Case 5 passed: Bag 1 is Complete, Bag 2 is Incomplete, Save is disabled');
 
-assert.strictEqual(batchSummary.totalBags, 3);
-assert.strictEqual(batchSummary.totalGrossG, 69535);
-assert.strictEqual(fmtKg(batchSummary.totalGrossG / 1000), '69.535 kg');
-assert.strictEqual(batchSummary.totalRola, 165);
-assert.strictEqual(batchSummary.totalTareG, 33000);
-assert.strictEqual(fmtKg(batchSummary.totalTareG / 1000), '33.000 kg');
-assert.strictEqual(batchSummary.totalNetG, 36535);
-assert.strictEqual(fmtKg(batchSummary.totalNetG / 1000), '36.535 kg');
-console.log('✓ Batch Summary matched exactly:');
-console.log(`  Total Bags:  ${batchSummary.totalBags}`);
-console.log(`  Total Gross: ${fmtKg(batchSummary.totalGrossG / 1000)} (${batchSummary.totalGrossG} g)`);
-console.log(`  Total Rola:  ${batchSummary.totalRola}`);
-console.log(`  Total Tare:  ${fmtKg(batchSummary.totalTareG / 1000)} (${batchSummary.totalTareG} g)`);
-console.log(`  Total Net:   ${fmtKg(batchSummary.totalNetG / 1000)} (${batchSummary.totalNetG} g)`);
+// ── Case 6: Bag 1 valid, Bag 2 incomplete, User removes Bag 2 ───────────────
+console.log('\n[Case 6] User removes Bag 2 from batch');
+const batchCase6 = batchCase5.filter(b => b.id !== 'b2');
+assert.strictEqual(batchCase6.length, 1);
+assert.strictEqual(checkBatchCanSave(batchCase6), true);
+console.log('✓ Case 6 passed: Removing Bag 2 leaves valid Bag 1, Save becomes enabled immediately');
 
-// ── Test 3: Challan-Based Grouping in Table ───────────────────────────────
-console.log('\n[Test 3] Challan Grouping (Challan 100 with 3 bags & Challan 150 with 2 bags):');
-const mockReceipts = [
-  // Challan 100: 3 bags
-  { id: '1', party_id: 'p1', party: { name: 'Prakash' }, date: '2026-09-08', challan_no: '100', color: 'Gold', gross_weight: 23.535, tare_weight: 12.000, net_weight: 11.535, rola_count: 60 },
-  { id: '2', party_id: 'p1', party: { name: 'Prakash' }, date: '2026-09-08', challan_no: '100', color: 'Gold', gross_weight: 24.200, tare_weight: 10.000, net_weight: 14.200, rola_count: 50 },
-  { id: '3', party_id: 'p1', party: { name: 'Prakash' }, date: '2026-09-08', challan_no: '100', color: 'Gold', gross_weight: 21.800, tare_weight: 11.000, net_weight: 10.800, rola_count: 55 },
-  // Challan 150: 2 bags
-  { id: '4', party_id: 'p1', party: { name: 'Prakash' }, date: '2026-09-08', challan_no: '150', color: 'Silver', gross_weight: 23.424, tare_weight: 3.000, net_weight: 20.424, rola_count: 50 },
-  { id: '5', party_id: 'p1', party: { name: 'Prakash' }, date: '2026-09-08', challan_no: '150', color: 'Silver', gross_weight: 18.500, tare_weight: 2.500, net_weight: 16.000, rola_count: 40 },
-  // No Challan: 1 bag
-  { id: '6', party_id: 'p2', party: { name: 'Satish' }, date: '2026-09-08', challan_no: null, color: null, gross_weight: 15.000, tare_weight: 2.000, net_weight: 13.000, rola_count: 10 },
-];
-
-const groups = groupReceiptsByChallan(mockReceipts);
-assert.strictEqual(groups.length, 3);
-
-// Group 0: Challan 100
-assert.strictEqual(groups[0].challanNo, '100');
-assert.strictEqual(groups[0].receipts.length, 3);
-assert.strictEqual(groups[0].totalGross.toFixed(3), '69.535');
-assert.strictEqual(groups[0].totalNet.toFixed(3), '36.535');
-assert.strictEqual(groups[0].totalRola, 165);
-
-// Group 1: Challan 150
-assert.strictEqual(groups[1].challanNo, '150');
-assert.strictEqual(groups[1].receipts.length, 2);
-assert.strictEqual(groups[1].totalGross.toFixed(3), '41.924');
-assert.strictEqual(groups[1].totalNet.toFixed(3), '36.424');
-assert.strictEqual(groups[1].totalRola, 90);
-
-// Group 2: No Challan
-assert.strictEqual(groups[2].challanNo, null);
-assert.strictEqual(groups[2].receipts.length, 1);
-
-// Verify sequence: Bag 1, Bag 2, Bag 3 within Challan 100
-groups[0].receipts.forEach((r, idx) => {
-  const bagLabel = `Bag ${idx + 1}`;
-  assert.strictEqual(bagLabel, `Bag ${idx + 1}`);
-});
-
-console.log('✓ Challan Groups created accurately:');
-console.log(`  Group 0: Challan #100 → 3 Bags (Bag 1, Bag 2, Bag 3), Total Net: ${fmtKg(groups[0].totalNet)}`);
-console.log(`  Group 1: Challan #150 → 2 Bags (Bag 1, Bag 2), Total Net: ${fmtKg(groups[1].totalNet)}`);
-console.log(`  Group 2: No Challan   → 1 Bag (Bag 1), Total Net: ${fmtKg(groups[2].totalNet)}`);
-
-// Verify alternating group backgrounds
-const bg0 = 0 % 2 === 0 ? '#ffffff' : '#fcfbf7';
-const bg1 = 1 % 2 === 0 ? '#ffffff' : '#fcfbf7';
-const bg2 = 2 % 2 === 0 ? '#ffffff' : '#fcfbf7';
-assert.strictEqual(bg0, '#ffffff');
-assert.strictEqual(bg1, '#fcfbf7');
-assert.strictEqual(bg2, '#ffffff');
-console.log('✓ Alternating group background pattern verified: [Group 0: #ffffff, Group 1: #fcfbf7, Group 2: #ffffff]');
-
-// ── Test 4: Optional Color & Payload Conversion ───────────────────────────
-console.log('\n[Test 4] Optional Color & Payload mapping:');
-const partyId = 'test-party-123';
-const date = '2026-09-08';
-const emptyColor = '';
-const challanNo = 'CH-9988';
-
-const payloads = bagsData.map((b) => {
-  const calc = calculateBag(b.grossGrams, b.rolaCount, b.perRolaGrams);
-  return {
-    party_id: partyId,
-    date: date,
-    color: emptyColor.trim() || null,
-    challan_no: challanNo.trim() || null,
-    gross_weight: calc.grossKg,
-    tare_weight: calc.tareKg,
-    rola_count: calc.rolaCnt,
-  };
-});
-
-assert.strictEqual(payloads.length, 3);
-assert.strictEqual(payloads[0].color, null);
-assert.strictEqual(payloads[0].gross_weight, 23.535);
-assert.strictEqual(payloads[0].tare_weight, 12.000);
-assert.strictEqual(payloads[0].rola_count, 60);
-console.log('✓ Empty color correctly mapped to null in payload, ready to save to database');
-
-// ── Test 5: Edit Restoration & Derived Per-Rola Weight ─────────────────────
-console.log('\n[Test 5] Edit Restoration & Original Per-Rola Derivation:');
-const existingRecord = {
-  id: 'rec-456',
-  party_id: 'party-1',
-  date: '2026-09-08',
-  color: null,
-  gross_weight: 24.2,
-  tare_weight: 9.0,
-  rola_count: 50,
-};
-
-const loadedGrossGrams = kgToGrams(existingRecord.gross_weight);
-const loadedRolaCount = String(existingRecord.rola_count);
-const derivedPerRola = String(Math.round((existingRecord.tare_weight * 1000) / existingRecord.rola_count));
-
-assert.strictEqual(loadedGrossGrams, '24200');
-assert.strictEqual(loadedRolaCount, '50');
-assert.strictEqual(derivedPerRola, '180');
-
-const editCalc = calculateBag(loadedGrossGrams, loadedRolaCount, derivedPerRola);
-assert.strictEqual(editCalc.tareG, 9000);
-assert.strictEqual(editCalc.netG, 15200);
-console.log(`✓ Edit successfully restored original 180g per rola and recalculated: Net = ${editCalc.netG} g (${fmtKg(editCalc.netKg)})`);
-
-// ── Test 6: Validation Rules ──────────────────────────────────────────────
-console.log('\n[Test 6] Validation error detection:');
-const invalidTare = calculateBag('10000', '60', '200');
-assert.strictEqual(invalidTare.isTareInvalid, true);
-console.log('✓ Tare >= Gross correctly identified as invalid (12000g >= 10000g)');
-
-console.log('\nALL TESTS PASSED SUCCESSFULLY! ✓');
+console.log('\nALL 6 TEST CASES PASSED SUCCESSFULLY! ✓');

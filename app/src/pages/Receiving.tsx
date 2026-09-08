@@ -27,6 +27,11 @@ interface BagRow {
   grossGrams: string
   rolaCount: string
   perRolaGrams: string
+  touched?: {
+    gross?: boolean
+    rola?: boolean
+    perRola?: boolean
+  }
 }
 
 interface BatchHeaderState {
@@ -48,13 +53,91 @@ interface ChallanGroup {
   totalRola: number
 }
 
+interface BagValidationResult {
+  grossError: string | null
+  rolaError: string | null
+  perRolaError: string | null
+  tareError: string | null
+  isValid: boolean
+  grossG: number
+  rolaCnt: number
+  perRolaG: number
+  tareG: number
+  netG: number
+}
+
+function validateBag(bag: BagRow): BagValidationResult {
+  let grossError: string | null = null
+  let rolaError: string | null = null
+  let perRolaError: string | null = null
+  let tareError: string | null = null
+
+  // 1. Gross Weight validation
+  if (!bag.grossGrams.trim()) {
+    grossError = 'Gross weight is required'
+  } else {
+    const g = parseInt(bag.grossGrams, 10)
+    if (isNaN(g) || g <= 0) {
+      grossError = 'Gross weight must be greater than 0'
+    }
+  }
+
+  // 2. Rola Count validation
+  if (!bag.rolaCount.trim()) {
+    rolaError = 'Rola count is required'
+  } else {
+    const r = parseInt(bag.rolaCount, 10)
+    if (isNaN(r) || r < 0) {
+      rolaError = 'Rola count cannot be negative'
+    }
+  }
+
+  // 3. Per Rola Weight validation
+  const rCount = parseInt(bag.rolaCount.trim() || '0', 10)
+  if (bag.perRolaGrams.trim()) {
+    const pr = parseInt(bag.perRolaGrams, 10)
+    if (isNaN(pr) || pr <= 0) {
+      perRolaError = 'Per rola weight must be greater than 0'
+    }
+  } else if (!isNaN(rCount) && rCount > 0) {
+    perRolaError = 'Per rola weight is required'
+  }
+
+  const grossG = parseInt(bag.grossGrams, 10) || 0
+  const rolaCnt = isNaN(rCount) ? 0 : rCount
+  const perRolaG = parseInt(bag.perRolaGrams.trim() || '0', 10) || 0
+  const tareG = rolaCnt * perRolaG
+  const netG = Math.max(0, grossG - tareG)
+
+  // 4. Tare vs Gross validation
+  if (!grossError && !rolaError && !perRolaError && grossG > 0) {
+    if (tareG >= grossG) {
+      tareError = `Tare (${fmtKg(tareG / 1000)}) cannot exceed gross weight (${fmtKg(grossG / 1000)})`
+    }
+  }
+
+  const isValid = !grossError && !rolaError && !perRolaError && !tareError
+
+  return {
+    grossError,
+    rolaError,
+    perRolaError,
+    tareError,
+    isValid,
+    grossG,
+    rolaCnt,
+    perRolaG,
+    tareG,
+    netG,
+  }
+}
+
 function groupReceiptsByChallan(receipts: ReceiptWithParty[]): ChallanGroup[] {
   const groups: ChallanGroup[] = []
   const map = new Map<string, ChallanGroup>()
 
   for (const r of receipts) {
     const challanTrimmed = r.challan_no?.trim() || null
-    // Group key based on challan if present; otherwise individual/batch grouping
     const groupKey = challanTrimmed
       ? `challan_${challanTrimmed}_${r.party_id || 'unknown'}_${r.date}`
       : `no_challan_${r.id}`
@@ -93,6 +176,7 @@ export default function Receiving() {
   // Form open state
   const [isOpen, setIsOpen] = useState(false)
   const [editingReceiptId, setEditingReceiptId] = useState<string | null>(null)
+  const [submitAttempted, setSubmitAttempted] = useState(false)
 
   // Header & Bags state
   const [header, setHeader] = useState<BatchHeaderState>({
@@ -141,12 +225,18 @@ export default function Receiving() {
   const createBlankBag = (defaultPerRola: string): BagRow => ({
     id: Math.random().toString(36).substring(2, 9),
     grossGrams: '',
-    rolaCount: '0',
+    rolaCount: '',
     perRolaGrams: defaultPerRola,
+    touched: {
+      gross: false,
+      rola: false,
+      perRola: false,
+    },
   })
 
   const startNewBatch = (initialPartyId?: string) => {
     setEditingReceiptId(null)
+    setSubmitAttempted(false)
     setHeader({
       partyId: initialPartyId || parties[0]?.id || '',
       date: todayStr(),
@@ -161,6 +251,7 @@ export default function Receiving() {
 
   const editReceipt = (r: ReceiptWithParty) => {
     setEditingReceiptId(r.id)
+    setSubmitAttempted(false)
     setHeader({
       partyId: r.party_id || parties[0]?.id || '',
       date: r.date,
@@ -181,6 +272,11 @@ export default function Receiving() {
         grossGrams: kgToGrams(r.gross_weight),
         rolaCount: String(rolaCnt),
         perRolaGrams: originalPerRola,
+        touched: {
+          gross: true,
+          rola: true,
+          perRola: true,
+        },
       },
     ])
     setIsOpen(true)
@@ -191,6 +287,7 @@ export default function Receiving() {
   const closeForm = () => {
     setIsOpen(false)
     setEditingReceiptId(null)
+    setSubmitAttempted(false)
     setErrorMsg(null)
   }
 
@@ -201,6 +298,14 @@ export default function Receiving() {
   const removeBagRow = (id: string) => {
     if (bags.length <= 1) return
     setBags((prev) => prev.filter((b) => b.id !== id))
+  }
+
+  const markTouched = (id: string, field: 'gross' | 'rola' | 'perRola') => {
+    setBags((prev) =>
+      prev.map((b) =>
+        b.id === id ? { ...b, touched: { ...b.touched, [field]: true } } : b
+      )
+    )
   }
 
   const updateBagField = (
@@ -221,8 +326,21 @@ export default function Receiving() {
     )
   }
 
+  // Pre-calculate validations for all active bags
+  const bagValidations = bags.map((b) => ({
+    bag: b,
+    validation: validateBag(b),
+  }))
+
+  const allBagsValid =
+    bags.length > 0 && bagValidations.every((bv) => bv.validation.isValid)
+  const isHeaderValid = Boolean(header.partyId && header.date)
+  const canSave = allBagsValid && isHeaderValid && !saving
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setSubmitAttempted(true)
+
     if (!header.partyId) {
       setErrorMsg('Please select a party')
       return
@@ -238,39 +356,25 @@ export default function Receiving() {
       return
     }
 
-    // Validate each bag
-    for (let i = 0; i < bags.length; i++) {
-      const b = bags[i]
+    // Check if any bag is invalid
+    for (let i = 0; i < bagValidations.length; i++) {
+      const { validation } = bagValidations[i]
       const bagNum = i + 1
 
-      if (!b.grossGrams.trim()) {
-        setErrorMsg(`Bag #${bagNum}: Gross weight is required in grams (e.g. 23535)`)
+      if (validation.grossError) {
+        setErrorMsg(`Bag #${bagNum}: ${validation.grossError}`)
         return
       }
-
-      const grossG = parseInt(b.grossGrams, 10)
-      if (isNaN(grossG) || grossG <= 0) {
-        setErrorMsg(`Bag #${bagNum}: Gross weight must be a positive number in grams (e.g. 23535)`)
+      if (validation.rolaError) {
+        setErrorMsg(`Bag #${bagNum}: ${validation.rolaError}`)
         return
       }
-
-      const rolaCnt = parseInt(b.rolaCount.trim() || '0', 10)
-      if (isNaN(rolaCnt) || rolaCnt < 0) {
-        setErrorMsg(`Bag #${bagNum}: Rola count must be 0 or a positive integer`)
+      if (validation.perRolaError) {
+        setErrorMsg(`Bag #${bagNum}: ${validation.perRolaError}`)
         return
       }
-
-      const perRolaG = parseInt(b.perRolaGrams.trim() || '0', 10)
-      if (rolaCnt > 0 && (isNaN(perRolaG) || perRolaG <= 0)) {
-        setErrorMsg(`Bag #${bagNum}: Per-rola weight must be a positive number in grams`)
-        return
-      }
-
-      const tareG = rolaCnt * perRolaG
-      if (tareG >= grossG) {
-        setErrorMsg(
-          `Bag #${bagNum}: Tare weight (${fmtKg(tareG / 1000)}) cannot be greater than or equal to Gross weight (${fmtKg(grossG / 1000)})`
-        )
+      if (validation.tareError) {
+        setErrorMsg(`Bag #${bagNum}: ${validation.tareError}`)
         return
       }
     }
@@ -281,41 +385,29 @@ export default function Receiving() {
     try {
       if (editingReceiptId) {
         // Single bag update
-        const b = bags[0]
-        const grossG = parseInt(b.grossGrams, 10)
-        const rolaCnt = parseInt(b.rolaCount.trim() || '0', 10)
-        const perRolaG = parseInt(b.perRolaGrams.trim() || '0', 10)
-        const tareG = rolaCnt * perRolaG
-
+        const val = bagValidations[0].validation
         const payload: ReceiptPayload = {
           party_id: header.partyId,
           date: header.date,
           color: header.color.trim() || null,
           challan_no: header.challanNo.trim() || null,
-          gross_weight: grossG / 1000,
-          tare_weight: tareG / 1000,
-          rola_count: rolaCnt,
+          gross_weight: val.grossG / 1000,
+          tare_weight: val.tareG / 1000,
+          rola_count: val.rolaCnt,
         }
 
         await updateReceipt(editingReceiptId, payload)
       } else {
         // Multi-bag batch insert
-        const payloads: ReceiptPayload[] = bags.map((b) => {
-          const grossG = parseInt(b.grossGrams, 10)
-          const rolaCnt = parseInt(b.rolaCount.trim() || '0', 10)
-          const perRolaG = parseInt(b.perRolaGrams.trim() || '0', 10)
-          const tareG = rolaCnt * perRolaG
-
-          return {
-            party_id: header.partyId,
-            date: header.date,
-            color: header.color.trim() || null,
-            challan_no: header.challanNo.trim() || null,
-            gross_weight: grossG / 1000,
-            tare_weight: tareG / 1000,
-            rola_count: rolaCnt,
-          }
-        })
+        const payloads: ReceiptPayload[] = bagValidations.map(({ validation }) => ({
+          party_id: header.partyId,
+          date: header.date,
+          color: header.color.trim() || null,
+          challan_no: header.challanNo.trim() || null,
+          gross_weight: validation.grossG / 1000,
+          tare_weight: validation.tareG / 1000,
+          rola_count: validation.rolaCnt,
+        }))
 
         await insertReceipts(payloads)
       }
@@ -344,18 +436,12 @@ export default function Receiving() {
   }
 
   // Compute batch summary totals
-  const summary = bags.reduce(
-    (acc, b) => {
-      const grossG = parseInt(b.grossGrams, 10) || 0
-      const rolaCnt = parseInt(b.rolaCount, 10) || 0
-      const perRolaG = parseInt(b.perRolaGrams, 10) || 0
-      const tareG = rolaCnt * perRolaG
-      const netG = Math.max(0, grossG - tareG)
-
-      acc.totalGrossG += grossG
-      acc.totalRola += rolaCnt
-      acc.totalTareG += tareG
-      acc.totalNetG += netG
+  const summary = bagValidations.reduce(
+    (acc, { validation }) => {
+      acc.totalGrossG += validation.grossG
+      acc.totalRola += validation.rolaCnt
+      acc.totalTareG += validation.tareG
+      acc.totalNetG += validation.netG
       return acc
     },
     { totalGrossG: 0, totalRola: 0, totalTareG: 0, totalNetG: 0 }
@@ -409,6 +495,7 @@ export default function Receiving() {
       {isOpen && (
         <form
           onSubmit={submit}
+          noValidate
           className="mb-8 p-4 sm:p-6 rounded-xl shadow-sm"
           style={{
             background: 'var(--color-card)',
@@ -500,25 +587,29 @@ export default function Receiving() {
 
           {/* Bags List Section */}
           <div className="mb-6">
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--color-ink)' }}>
-                Bag Entries ({bags.length})
-              </h4>
-              <p className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                Gross weight in grams (e.g. 23535 = 23.535 kg) — Tare and Net calculate automatically
-              </p>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--color-ink)' }}>
+                  Bag Entries ({bags.length})
+                </h4>
+                <p className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
+                  Gross weight (g) & Rola count are required for each bag.
+                </p>
+              </div>
             </div>
 
             <div className="flex flex-col gap-3.5">
-              {bags.map((b, index) => {
-                const grossG = parseInt(b.grossGrams, 10) || 0
-                const rolaCnt = parseInt(b.rolaCount, 10) || 0
-                const perRolaG = parseInt(b.perRolaGrams, 10) || 0
-                const tareG = rolaCnt * perRolaG
-                const netG = Math.max(0, grossG - tareG)
-
-                const hasGross = Boolean(b.grossGrams.trim() && grossG > 0)
-                const isTareInvalid = hasGross && tareG >= grossG
+              {bagValidations.map(({ bag: b, validation }, index) => {
+                const showGrossError =
+                  Boolean(validation.grossError) &&
+                  (b.touched?.gross || submitAttempted)
+                const showRolaError =
+                  Boolean(validation.rolaError) &&
+                  (b.touched?.rola || submitAttempted)
+                const showPerRolaError =
+                  Boolean(validation.perRolaError) &&
+                  (b.touched?.perRola || submitAttempted)
+                const isTareInvalid = Boolean(validation.tareError)
 
                 return (
                   <div
@@ -526,9 +617,12 @@ export default function Receiving() {
                     className="p-4 rounded-xl transition-all"
                     style={{
                       background: '#ffffff',
-                      border: isTareInvalid
-                        ? '1.5px solid var(--color-due)'
-                        : '1px solid var(--color-border)',
+                      border:
+                        validation.isValid
+                          ? '1px solid var(--color-border)'
+                          : showGrossError || showRolaError || showPerRolaError || isTareInvalid
+                          ? '1.5px solid var(--color-due)'
+                          : '1px solid var(--color-border)',
                       boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
                     }}
                   >
@@ -544,9 +638,33 @@ export default function Receiving() {
                         >
                           Bag {index + 1}
                         </span>
-                        {hasGross && (
-                          <span className="text-xs font-semibold" style={{ color: 'var(--color-brass)' }}>
-                            Net: {fmtKg(netG / 1000)}
+
+                        {/* Subtle Status Badge */}
+                        {validation.isValid ? (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1"
+                            style={{
+                              background: 'var(--color-positive-bg)',
+                              color: 'var(--color-positive)',
+                            }}
+                          >
+                            <Check size={12} strokeWidth={2.5} /> Complete
+                          </span>
+                        ) : (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1"
+                            style={{
+                              background: 'var(--color-due-bg)',
+                              color: 'var(--color-due)',
+                            }}
+                          >
+                            <AlertCircle size={12} /> Incomplete
+                          </span>
+                        )}
+
+                        {validation.isValid && (
+                          <span className="text-xs font-semibold ml-1" style={{ color: 'var(--color-brass)' }}>
+                            Net: {fmtKg(validation.netG / 1000)}
                           </span>
                         )}
                       </div>
@@ -576,41 +694,70 @@ export default function Receiving() {
                           min="1"
                           placeholder="e.g. 23535"
                           value={b.grossGrams}
+                          style={{
+                            borderColor: showGrossError ? 'var(--color-due)' : undefined,
+                          }}
+                          onBlur={() => markTouched(b.id, 'gross')}
                           onChange={(e) => {
                             const val = e.target.value.replace(/[^0-9]/g, '')
                             updateBagField(b.id, 'grossGrams', val)
                           }}
                         />
-                        <div className="flex items-center justify-between text-xs mt-0.5">
-                          <span style={{ color: 'var(--color-ink-soft)' }}>Enter in grams</span>
-                          {hasGross && (
-                            <span
-                              className="font-bold tabular-nums"
-                              style={{ color: 'var(--color-brass)' }}
-                            >
-                              = {fmtKg(grossG / 1000)}
-                            </span>
-                          )}
-                        </div>
+                        {showGrossError ? (
+                          <span
+                            className="text-xs font-medium mt-1 flex items-center gap-1"
+                            style={{ color: 'var(--color-due)' }}
+                          >
+                            <AlertCircle size={11} className="shrink-0" />
+                            {validation.grossError}
+                          </span>
+                        ) : (
+                          <div className="flex items-center justify-between text-xs mt-0.5">
+                            <span style={{ color: 'var(--color-ink-soft)' }}>Enter in grams</span>
+                            {validation.grossG > 0 && (
+                              <span
+                                className="font-bold tabular-nums"
+                                style={{ color: 'var(--color-brass)' }}
+                              >
+                                = {fmtKg(validation.grossG / 1000)}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </Field>
 
                       {/* 2. Rola Count Input */}
-                      <Field label="Rola Count">
+                      <Field label="Rola Count *">
                         <TextInput
+                          required
                           type="number"
                           inputMode="numeric"
                           step="1"
                           min="0"
                           placeholder="e.g. 60"
                           value={b.rolaCount}
+                          style={{
+                            borderColor: showRolaError ? 'var(--color-due)' : undefined,
+                          }}
+                          onBlur={() => markTouched(b.id, 'rola')}
                           onChange={(e) => {
                             const val = e.target.value.replace(/[^0-9]/g, '')
                             updateBagField(b.id, 'rolaCount', val)
                           }}
                         />
-                        <span className="text-xs mt-0.5" style={{ color: 'var(--color-ink-soft)' }}>
-                          Total pieces
-                        </span>
+                        {showRolaError ? (
+                          <span
+                            className="text-xs font-medium mt-1 flex items-center gap-1"
+                            style={{ color: 'var(--color-due)' }}
+                          >
+                            <AlertCircle size={11} className="shrink-0" />
+                            {validation.rolaError}
+                          </span>
+                        ) : (
+                          <span className="text-xs mt-0.5" style={{ color: 'var(--color-ink-soft)' }}>
+                            Total pieces in bag
+                          </span>
+                        )}
                       </Field>
 
                       {/* 3. Per Rola Weight Input */}
@@ -622,16 +769,30 @@ export default function Receiving() {
                           min="1"
                           placeholder="e.g. 200"
                           value={b.perRolaGrams}
+                          style={{
+                            borderColor: showPerRolaError ? 'var(--color-due)' : undefined,
+                          }}
+                          onBlur={() => markTouched(b.id, 'perRola')}
                           onChange={(e) =>
                             updateBagField(b.id, 'perRolaGrams', e.target.value)
                           }
                         />
-                        <div className="flex items-center justify-between text-xs mt-0.5">
-                          <span style={{ color: 'var(--color-ink-soft)' }}>Grams per rola</span>
-                          <span className="text-[11px] font-medium" style={{ color: 'var(--color-ink-soft)' }}>
-                            (default {rememberedPerRola}g)
+                        {showPerRolaError ? (
+                          <span
+                            className="text-xs font-medium mt-1 flex items-center gap-1"
+                            style={{ color: 'var(--color-due)' }}
+                          >
+                            <AlertCircle size={11} className="shrink-0" />
+                            {validation.perRolaError}
                           </span>
-                        </div>
+                        ) : (
+                          <div className="flex items-center justify-between text-xs mt-0.5">
+                            <span style={{ color: 'var(--color-ink-soft)' }}>Grams per rola</span>
+                            <span className="text-[11px] font-medium" style={{ color: 'var(--color-ink-soft)' }}>
+                              (default {rememberedPerRola}g)
+                            </span>
+                          </div>
+                        )}
                       </Field>
 
                       {/* 4. Calculated Tare Weight */}
@@ -650,7 +811,7 @@ export default function Receiving() {
                               : 'var(--color-ink)',
                           }}
                         >
-                          <span>{fmtKg(tareG / 1000)}</span>
+                          <span>{fmtKg(validation.tareG / 1000)}</span>
                           <span
                             className="text-xs font-normal"
                             style={{
@@ -659,7 +820,7 @@ export default function Receiving() {
                                 : 'var(--color-ink-soft)',
                             }}
                           >
-                            {tareG.toLocaleString('en-IN')} g
+                            {validation.tareG.toLocaleString('en-IN')} g
                           </span>
                         </div>
                         <span
@@ -669,7 +830,7 @@ export default function Receiving() {
                           }}
                         >
                           {isTareInvalid
-                            ? 'Tare exceeds Gross weight!'
+                            ? validation.tareError
                             : 'Rola Count × Per Rola'}
                         </span>
                       </Field>
@@ -681,7 +842,7 @@ export default function Receiving() {
                           style={{
                             background: isTareInvalid
                               ? 'var(--color-due-bg)'
-                              : hasGross
+                              : validation.grossG > 0
                               ? 'var(--color-border-soft)'
                               : 'var(--color-paper)',
                             border: `1px solid ${
@@ -689,18 +850,18 @@ export default function Receiving() {
                             }`,
                             color: isTareInvalid
                               ? 'var(--color-due)'
-                              : hasGross
+                              : validation.grossG > 0
                               ? 'var(--color-brass)'
                               : 'var(--color-ink-soft)',
                           }}
                         >
-                          <span>{hasGross ? fmtKg(netG / 1000) : '—'}</span>
-                          {hasGross && (
+                          <span>{validation.grossG > 0 ? fmtKg(validation.netG / 1000) : '—'}</span>
+                          {validation.grossG > 0 && (
                             <span
                               className="text-xs font-normal"
                               style={{ color: 'var(--color-ink-soft)' }}
                             >
-                              {netG.toLocaleString('en-IN')} g
+                              {validation.netG.toLocaleString('en-IN')} g
                             </span>
                           )}
                         </div>
@@ -811,11 +972,11 @@ export default function Receiving() {
           </div>
 
           {/* Form Actions */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <Button
               type="submit"
-              disabled={saving}
-              className="py-2.5 px-5 font-semibold text-sm shadow-sm"
+              disabled={!canSave}
+              className="py-2.5 px-5 font-semibold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Check size={16} />{' '}
               {saving
@@ -826,6 +987,7 @@ export default function Receiving() {
                 ? `Save All Entries (${bags.length} Bags)`
                 : 'Save Entry'}
             </Button>
+
             <Button
               type="button"
               variant="ghost"
@@ -835,6 +997,13 @@ export default function Receiving() {
             >
               Cancel
             </Button>
+
+            {!allBagsValid && (
+              <span className="text-xs font-medium flex items-center gap-1" style={{ color: 'var(--color-due)' }}>
+                <AlertCircle size={13} className="shrink-0" />
+                Fill all required fields in each bag to enable save
+              </span>
+            )}
           </div>
         </form>
       )}
