@@ -1,0 +1,82 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* ── Kasab Val Manager Design Tokens ── */
+  --color-paper:        #FAF7F0;   /* App background */
+  --color-ink:          #241F19;   /* Primary text / dark header */
+  --color-ink-soft:     #6B6357;   /* Secondary text, labels, subtitles */
+  --color-brass:        #A6752B;   /* Primary brass accent */
+  --color-brass-dark:   #8A5F1F;   /* Dark brass border / active */
+  --color-steel:        #5B6472;   /* Machine / neutral accent */
+  --color-positive:     #3F6B52;   /* Payments, profit, done */
+  --color-positive-bg:  #EAF1EC;   /* Positive background */
+  --color-due:          #A6432F;   /* Dues, expenses, pending */
+  --color-due-bg:       #F7EAE6;   /* Due background */
+  --color-card:         #FFFFFF;   /* Cards, forms, tables */
+  --color-border:       #E3D9C4;   /* Dividers, borders */
+  --color-border-soft:  #EFE8D8;   /* Table header bg, soft dividers */
+
+  /* Typography */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body:    'Inter', system-ui, sans-serif;
+}
+
+/* ── Base ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-body);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+}
+
+/* Tabular numbers for all weight/money/count displays */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Input and Select focus */
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--color-brass) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brass) 20%, transparent);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-brass) 20%, transparent);
+}
+
+/* Minimum tap target */
+button, a, [role="button"] {
+  min-height: 36px;
+  min-width: 36px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-paper);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}

@@ -1,0 +1,19 @@
+# Node / Vite
+node_modules
+dist
+dist-ssr
+*.local
+.env.local
+*.log
+
+# OS & Editors
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Android / Capacitor
+app/android/.gradle
+app/android/build
+app/android/app/build
+app/android/capacitor-cordova-android-plugins
