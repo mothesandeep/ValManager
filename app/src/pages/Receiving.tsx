@@ -727,7 +727,7 @@ export default function Receiving() {
                     background: 'transparent',
                   }}
                 >
-                  <Plus size={16} /> + Add Another Bag
+                  <Plus size={16} /> Add Another Bag
                 </button>
               </div>
             )}
