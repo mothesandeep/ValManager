@@ -6,6 +6,8 @@ export interface Party {
   phone: string | null
   address: string | null
   notes: string | null
+  default_rola_weight_g?: number | null
+  default_bungari_weight_g?: number | null
   created_at: string
 }
 
@@ -15,8 +17,15 @@ export interface PartyStats {
   receivable: number          // SUM(dispatches.amount)
   received: number            // SUM(payments.amount)
   balance: number             // receivable − received
-  totalDispatchWeight: number // SUM(dispatches.net_val_weight)
-  totalDispatchValue: number  // SUM(dispatches.amount)
+  totalReceivedWeight: number // Total Kasab Net received
+  unprocessedKasabWeight: number // Unreconciled Kasab still in workshop
+  reconciledInputWeight: number  // Processed/reconciled Kasab input
+  reconciledOutputWeight: number // Processed/reconciled Val + Kali output
+  totalDispatchWeight: number // Total Val + Kali dispatched
+  totalDispatchValue: number  // Total Val dispatched amount
+  gapchaWeight: number        // Gapcha from completed reconciliations
+  gapchaSold: number          // Gapcha sold for this party
+  remainingGapcha: number     // gapchaWeight − gapchaSold
 }
 
 export interface Receipt {
@@ -29,6 +38,8 @@ export interface Receipt {
   net_weight: number     // generated always: gross_weight − tare_weight (read-only, never in INSERT/UPDATE)
   challan_no: string | null
   rola_count: number
+  reconciliation_id?: string | null
+  status?: string | null
   created_at: string
 }
 
@@ -62,8 +73,10 @@ export interface Dispatch {
   id: string
   party_id: string | null
   date: string
-  dispatch_type?: 'Val' | 'Kali' | string | null
+  dispatch_type?: 'Val' | 'Rola' | 'Kali' | string | null
   challan_no?: string | null
+  cord_count?: number | null
+  twist_type?: 'S' | 'Z' | string | null
   bungari_count: number
   bungari_weight_g?: number | null
   bore_gross_weight: number
@@ -71,6 +84,7 @@ export interface Dispatch {
   rate_per_kg: number | null
   amount: number | null
   rola_count?: number | null
+  reconciliation_id?: string | null
   created_at: string
 }
 
@@ -111,6 +125,51 @@ export interface Expense {
   amount: number
   note: string | null
   created_at: string
+}
+
+export interface GapchaReconciliation {
+  id: string
+  party_id: string
+  date: string
+  input_kasab_weight: number
+  output_val_weight: number
+  output_kali_weight: number
+  reconciled_output: number
+  gapcha_weight: number
+  note: string | null
+  created_at: string
+}
+
+export interface GapchaReconciliationWithParty extends GapchaReconciliation {
+  party: { name: string } | null
+}
+
+export interface GapchaSale {
+  id: string
+  party_id: string | null
+  buyer_name: string
+  date: string
+  weight_kg: number
+  rate_per_kg: number | null
+  amount: number | null
+  note: string | null
+  created_at: string
+}
+
+export interface GapchaSaleWithParty extends GapchaSale {
+  party: { name: string } | null
+}
+
+export interface OverallGapchaStats {
+  totalReceivedNetWeight: number
+  unprocessedKasabWeight: number
+  reconciledInputWeight: number
+  reconciledOutputWeight: number
+  totalReturnedNetWeight: number
+  totalGapchaGenerated: number
+  totalGapchaSold: number
+  remainingGapchaWeight: number
+  totalGapchaRevenue: number
 }
 
 export interface SyncFailure {
@@ -198,3 +257,35 @@ export function todayStr(): string {
 }
 
 export const today = todayStr
+
+/** Current month formatted as YYYY-MM (e.g. "2026-09") */
+export function currentMonthStr(d = new Date()): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}`
+}
+
+/** Format YYYY-MM to "September 2026" or "All Time" */
+export function formatMonthYear(monthStr?: string | null): string {
+  if (!monthStr || monthStr === 'all') return 'All Time'
+  const parts = monthStr.split('-').map(Number)
+  const y = parts[0]
+  const m = parts[1]
+  if (!y || !m) return monthStr
+  const dt = new Date(y, m - 1, 1)
+  return dt.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+}
+
+/** Advance or rewind a YYYY-MM month string by offset */
+export function shiftMonth(monthStr: string, offsetMonths: number): string {
+  if (!monthStr || monthStr === 'all') {
+    monthStr = currentMonthStr()
+  }
+  const parts = monthStr.split('-').map(Number)
+  const y = parts[0]
+  const m = parts[1]
+  const dt = new Date(y, m - 1 + offsetMonths, 1)
+  const newY = dt.getFullYear()
+  const newM = String(dt.getMonth() + 1).padStart(2, '0')
+  return `${newY}-${newM}`
+}

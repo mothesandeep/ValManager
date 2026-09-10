@@ -6,13 +6,15 @@ import {
   fetchDispatches,
   fetchPayments,
   fetchRolaReturns,
+  fetchGapchaSales,
+  fetchReconciliations,
   insertParty,
   updateParty,
   deleteParty,
   computePartyStats,
 } from '../lib/queries'
 import type { Party, PartyStats } from '../types'
-import { fmtMoney } from '../types'
+import { fmtMoney, fmtKg } from '../types'
 import {
   SectionHeader,
   Button,
@@ -28,6 +30,8 @@ interface PartyFormState {
   phone: string
   address: string
   notes: string
+  rolaWeight: string
+  bungariWeight: string
 }
 
 const EMPTY_FORM: PartyFormState = {
@@ -36,6 +40,8 @@ const EMPTY_FORM: PartyFormState = {
   phone: '',
   address: '',
   notes: '',
+  rolaWeight: '',
+  bungariWeight: '',
 }
 
 export default function Parties() {
@@ -51,13 +57,15 @@ export default function Parties() {
     setLoading(true)
     setErrorMsg(null)
     try {
-      const [partiesData, receiptsData, rolaData, dispatchesData, paymentsData] =
+      const [partiesData, receiptsData, rolaData, dispatchesData, paymentsData, gapchaData, reconsData] =
         await Promise.all([
           fetchParties(),
           fetchReceipts(),
           fetchRolaReturns(),
           fetchDispatches(),
           fetchPayments(),
+          fetchGapchaSales(),
+          fetchReconciliations(),
         ])
 
       setParties(partiesData)
@@ -66,7 +74,9 @@ export default function Parties() {
         receiptsData,
         rolaData,
         dispatchesData,
-        paymentsData
+        paymentsData,
+        gapchaData,
+        reconsData
       )
       setStats(computed)
     } catch (err) {
@@ -94,6 +104,14 @@ export default function Parties() {
       phone: p.phone || '',
       address: p.address || '',
       notes: p.notes || '',
+      rolaWeight:
+        p.default_rola_weight_g !== null && p.default_rola_weight_g !== undefined
+          ? String(p.default_rola_weight_g)
+          : '',
+      bungariWeight:
+        p.default_bungari_weight_g !== null && p.default_bungari_weight_g !== undefined
+          ? String(p.default_bungari_weight_g)
+          : '',
     })
     setErrorMsg(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -105,6 +123,9 @@ export default function Parties() {
     setSaving(true)
     setErrorMsg(null)
 
+    const rolaG = form.rolaWeight ? parseInt(form.rolaWeight, 10) : null
+    const bungariG = form.bungariWeight ? parseInt(form.bungariWeight, 10) : null
+
     try {
       if (form.id) {
         await updateParty(form.id, {
@@ -112,6 +133,8 @@ export default function Parties() {
           phone: form.phone.trim() || null,
           address: form.address.trim() || null,
           notes: form.notes.trim() || null,
+          default_rola_weight_g: rolaG,
+          default_bungari_weight_g: bungariG,
         })
       } else {
         await insertParty({
@@ -119,6 +142,8 @@ export default function Parties() {
           phone: form.phone.trim() || null,
           address: form.address.trim() || null,
           notes: form.notes.trim() || null,
+          default_rola_weight_g: rolaG,
+          default_bungari_weight_g: bungariG,
         })
       }
       setForm(null)
@@ -212,6 +237,28 @@ export default function Parties() {
               placeholder="e.g. Regular 8-cord party"
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
+          </Field>
+          <Field label="Default Rola Weight (Receiving, grams)">
+            <TextInput
+              type="text"
+              inputMode="numeric"
+              placeholder="e.g. 200 (Leave empty for global default)"
+              value={form.rolaWeight}
+              onChange={(e) =>
+                setForm({ ...form, rolaWeight: e.target.value.replace(/[^0-9]/g, '') })
+              }
+            />
+          </Field>
+          <Field label="Default Bungri Weight (Dispatch, grams)">
+            <TextInput
+              type="text"
+              inputMode="numeric"
+              placeholder="e.g. 70 (Leave empty for global default)"
+              value={form.bungariWeight}
+              onChange={(e) =>
+                setForm({ ...form, bungariWeight: e.target.value.replace(/[^0-9]/g, '') })
+              }
             />
           </Field>
           <div className="flex gap-2 sm:col-span-2 pt-1">
@@ -329,10 +376,20 @@ export default function Parties() {
                       {p.notes}
                     </p>
                   )}
+
+                  {/* Weights badge */}
+                  <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-[var(--color-paper)] border border-[var(--color-border)] text-[var(--color-ink-soft)]">
+                      Rola: {p.default_rola_weight_g ? `${p.default_rola_weight_g}g` : '200g (default)'}
+                    </span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-[var(--color-paper)] border border-[var(--color-border)] text-[var(--color-ink-soft)]">
+                      Bungri: {p.default_bungari_weight_g ? `${p.default_bungari_weight_g}g` : '70g (default)'}
+                    </span>
+                  </div>
                 </div>
 
                 <div
-                  className="flex gap-4 mt-3 pt-3 text-xs"
+                  className="grid grid-cols-3 gap-2 mt-3 pt-3 text-xs"
                   style={{ borderTop: '1px solid var(--color-border-soft)' }}
                 >
                   <div>
@@ -360,6 +417,20 @@ export default function Parties() {
                       }}
                     >
                       {fmtMoney(s.balance)}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: 'var(--color-ink-soft)' }}>Gapcha Avail</div>
+                    <div
+                      className="font-semibold tabular-nums mt-0.5"
+                      style={{
+                        color:
+                          (s.remainingGapcha || 0) > 0
+                            ? 'var(--color-positive)'
+                            : 'var(--color-ink-soft)',
+                      }}
+                    >
+                      {fmtKg(s.remainingGapcha || 0)}
                     </div>
                   </div>
                 </div>

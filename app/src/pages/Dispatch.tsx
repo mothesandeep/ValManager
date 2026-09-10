@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, Fragment } from 'react'
-import { Plus, Pencil, Trash2, Check, X, Layers, AlertCircle, Sparkles } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Plus, Pencil, Trash2, Check, AlertCircle } from 'lucide-react'
 import {
   fetchParties,
   fetchDispatches,
@@ -9,273 +9,81 @@ import {
   type DispatchPayload,
 } from '../lib/queries'
 import type { Party, DispatchWithParty } from '../types'
-import { fmtDate, fmtKg, fmtMoney, kgToGrams, todayStr } from '../types'
+import { fmtDate, fmtKg, fmtMoney, todayStr } from '../types'
 import {
   SectionHeader,
+  KpiCard,
   Button,
   Field,
-  TextInput,
   Select,
   EmptyState,
   ConfirmDelete,
 } from '../components/ui/UIComponents'
+import { useMonth } from '../context/MonthContext'
+import { resolvePartyBungariWeight, getTarRate } from '../lib/settings'
 
-const STORAGE_KEY_BUNGARI_WEIGHT = 'kasab_last_bungari_weight'
+type DispatchType = 'Val' | 'Rola'
 
-type DispatchType = 'Val' | 'Kali'
+// Available Tar (cord count) options for Val dispatch
+const TAR_OPTIONS = [4, 6, 8, 9, 10, 12, 14, 16, 18] as const
 
-interface DispatchHeaderState {
+interface BagItem {
+  id: string
+  gross: string      // in kg
+  bungariCount: string  // integer for Val
+  rolaCount: string     // integer for Rola
+  // bungariWeightGrams is no longer a per-bag field — resolved from party settings
+}
+
+interface FormHeader {
   partyId: string
   date: string
   dispatchType: DispatchType
   challanNo: string
-  ratePerKg: string // Required for Val
-}
-
-interface DispatchBagRow {
-  id: string
-  grossGrams: string // Bore Gross for Val, Gross Weight for Kali
-  bungariCount: string // For Val
-  bungariWeightGrams: string // For Val, default 70g
-  rolaCount: string // For Kali
-  touched?: {
-    gross?: boolean
-    bungariCount?: boolean
-    bungariWeight?: boolean
-    rolaCount?: boolean
-  }
-}
-
-interface BagValidationResult {
-  grossError: string | null
-  bungariError: string | null
-  bungariWeightError: string | null
-  rolaError: string | null
-  tareError: string | null
-  isValid: boolean
-  grossG: number
-  bungariCount: number
-  bungariWeightG: number
-  bungariTareG: number
-  netValG: number
-  amount: number | null
-  rolaCount: number
-}
-
-function sanitizeNumberString(str: string): string {
-  const clean = str.replace(/[^0-9]/g, '')
-  if (!clean) return ''
-  // Remove leading zeros but keep single '0'
-  return String(parseInt(clean, 10))
-}
-
-function validateBag(
-  bag: DispatchBagRow,
-  dispatchType: DispatchType,
-  rateStr: string
-): BagValidationResult {
-  let grossError: string | null = null
-  let bungariError: string | null = null
-  let bungariWeightError: string | null = null
-  let rolaError: string | null = null
-  let tareError: string | null = null
-
-  // 1. Gross Weight validation (Both Val & Kali)
-  if (!bag.grossGrams.trim()) {
-    grossError = 'Gross weight is required'
-  } else {
-    const g = parseInt(bag.grossGrams, 10)
-    if (isNaN(g) || g <= 0) {
-      grossError = 'Gross weight must be greater than 0'
-    }
-  }
-
-  const grossG = parseInt(bag.grossGrams, 10) || 0
-
-  if (dispatchType === 'Val') {
-    // 2. Bungari Count validation (Val)
-    if (!bag.bungariCount.trim()) {
-      bungariError = 'Bungari count is required'
-    } else {
-      const b = parseInt(bag.bungariCount, 10)
-      if (isNaN(b) || b < 0) {
-        bungariError = 'Bungari count cannot be negative'
-      }
-    }
-
-    // 3. Bungari Weight per piece (Val)
-    const bCount = parseInt(bag.bungariCount.trim() || '0', 10)
-    if (bag.bungariWeightGrams.trim()) {
-      const bw = parseInt(bag.bungariWeightGrams, 10)
-      if (isNaN(bw) || bw <= 0) {
-        bungariWeightError = 'Bungari weight must be greater than 0'
-      }
-    } else if (!isNaN(bCount) && bCount > 0) {
-      bungariWeightError = 'Bungari weight is required'
-    }
-
-    const bungariCnt = isNaN(bCount) ? 0 : bCount
-    const bungariWtG = parseInt(bag.bungariWeightGrams.trim() || '70', 10) || 70
-    const bungariTareG = bungariCnt * bungariWtG
-    const netValG = Math.max(0, grossG - bungariTareG)
-
-    // Tare vs Gross validation
-    if (!grossError && !bungariError && !bungariWeightError && grossG > 0) {
-      if (bungariTareG >= grossG) {
-        tareError = 'Bungari weight cannot exceed gross weight'
-      }
-    }
-
-    // Rate & Amount calculation
-    const rate = parseFloat(rateStr)
-    const amount =
-      !isNaN(rate) && rate > 0
-        ? Math.round((netValG / 1000) * rate * 100) / 100
-        : null
-
-    const isValid =
-      !grossError &&
-      !bungariError &&
-      !bungariWeightError &&
-      !tareError &&
-      !isNaN(rate) &&
-      rate > 0
-
-    return {
-      grossError,
-      bungariError,
-      bungariWeightError,
-      rolaError: null,
-      tareError,
-      isValid,
-      grossG,
-      bungariCount: bungariCnt,
-      bungariWeightG: bungariWtG,
-      bungariTareG,
-      netValG,
-      amount,
-      rolaCount: 0,
-    }
-  } else {
-    // Kali Validation
-    if (!bag.rolaCount.trim()) {
-      rolaError = 'Rola count is required'
-    } else {
-      const r = parseInt(bag.rolaCount, 10)
-      if (isNaN(r) || r < 0) {
-        rolaError = 'Rola count cannot be negative'
-      }
-    }
-
-    const rCount = parseInt(bag.rolaCount.trim() || '0', 10)
-    const rolaCnt = isNaN(rCount) ? 0 : rCount
-
-    const isValid = !grossError && !rolaError
-
-    return {
-      grossError,
-      bungariError: null,
-      bungariWeightError: null,
-      rolaError,
-      tareError: null,
-      isValid,
-      grossG,
-      bungariCount: 0,
-      bungariWeightG: 0,
-      bungariTareG: 0,
-      netValG: grossG, // Gross is canonical weight for Kali
-      amount: null,
-      rolaCount: rolaCnt,
-    }
-  }
-}
-
-interface ChallanGroup {
-  id: string
-  challanNo: string | null
-  partyName: string
-  date: string
-  dispatchType: string
-  dispatches: DispatchWithParty[]
-  totalGross: number
-  totalNetVal: number
-  totalAmount: number
-  totalBungari: number
-  totalRola: number
-}
-
-function groupDispatchesByChallan(dispatches: DispatchWithParty[]): ChallanGroup[] {
-  const groups: ChallanGroup[] = []
-  const map = new Map<string, ChallanGroup>()
-
-  for (const d of dispatches) {
-    const challanTrimmed = d.challan_no?.trim() || null
-    const groupKey = challanTrimmed
-      ? `challan_${challanTrimmed}_${d.party_id || 'unknown'}_${d.date}`
-      : `no_challan_${d.id}`
-
-    let g = map.get(groupKey)
-    if (!g) {
-      g = {
-        id: groupKey,
-        challanNo: challanTrimmed,
-        partyName: d.party?.name || '—',
-        date: d.date,
-        dispatchType: d.dispatch_type || 'Val',
-        dispatches: [],
-        totalGross: 0,
-        totalNetVal: 0,
-        totalAmount: 0,
-        totalBungari: 0,
-        totalRola: 0,
-      }
-      map.set(groupKey, g)
-      groups.push(g)
-    }
-
-    g.dispatches.push(d)
-    g.totalGross += Number(d.bore_gross_weight) || 0
-    g.totalNetVal += Number(d.net_val_weight) || 0
-    g.totalAmount += Number(d.amount) || 0
-    g.totalBungari += Number(d.bungari_count) || 0
-    g.totalRola += Number(d.rola_count) || 0
-  }
-
-  return groups
+  tar: string          // Cord count for Val (e.g. "8", "9", "10")
+  twistType: 'S' | 'Z' // S or Z twist type for Val
 }
 
 export default function Dispatch() {
+  const { filterByMonth, formattedMonth } = useMonth()
   const [dispatches, setDispatches] = useState<DispatchWithParty[]>([])
   const [parties, setParties] = useState<Party[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Form open state
+  // Form State
   const [isOpen, setIsOpen] = useState(false)
-  const [editingDispatchId, setEditingDispatchId] = useState<string | null>(null)
-  const [submitAttempted, setSubmitAttempted] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
-  // Header & Bags state
-  const [header, setHeader] = useState<DispatchHeaderState>({
+  const [header, setHeader] = useState<FormHeader>({
     partyId: '',
     date: todayStr(),
     dispatchType: 'Val',
     challanNo: '',
-    ratePerKg: '',
-  })
-  const [bags, setBags] = useState<DispatchBagRow[]>([])
-
-  // Remembered Bungari weight per piece (default 70g)
-  const [rememberedBungariWeight, setRememberedBungariWeight] = useState<string>(() => {
-    try {
-      return localStorage.getItem(STORAGE_KEY_BUNGARI_WEIGHT) || '70'
-    } catch {
-      return '70'
-    }
+    tar: '8',
+    twistType: 'S',
   })
 
-  const [deleting, setDeleting] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  // bungariWeightGrams is now resolved from party settings, stored per-session
+  const [rememberedBungariWeight, setRememberedBungariWeight] = useState<string>('70')
+
+  const createBlankBag = (): BagItem => ({
+    id: Math.random().toString(36).substring(2, 9),
+    gross: '',
+    bungariCount: '',
+    rolaCount: '',
+  })
+
+  // Separate bag lists to isolate Val and Rola data
+  const [valBags, setValBags] = useState<BagItem[]>([createBlankBag()])
+  const [rolaBags, setRolaBags] = useState<BagItem[]>([createBlankBag()])
+
+  // Auto-computed rate based on Tar only (S/Z is twist type only, no rate difference)
+  const autoRate = header.dispatchType === 'Val'
+    ? getTarRate(header.tar)
+    : 0
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -289,7 +97,7 @@ export default function Dispatch() {
       setParties(partiesData)
     } catch (err) {
       console.error('Error loading dispatches:', err)
-      setErrorMsg('Could not load dispatches.')
+      setErrorMsg('Could not load dispatch entries.')
     } finally {
       setLoading(false)
     }
@@ -299,142 +107,191 @@ export default function Dispatch() {
     void loadData()
   }, [loadData])
 
-  const createBlankBag = (defaultBungariWeight: string): DispatchBagRow => ({
-    id: Math.random().toString(36).substring(2, 9),
-    grossGrams: '',
-    bungariCount: '',
-    bungariWeightGrams: defaultBungariWeight,
-    rolaCount: '',
-    touched: {
-      gross: false,
-      bungariCount: false,
-      bungariWeight: false,
-      rolaCount: false,
-    },
-  })
+  const filteredDispatches = filterByMonth(dispatches)
+  const isRolaEntry = (d: DispatchWithParty) => d.dispatch_type === 'Kali' || d.dispatch_type === 'Rola'
 
-  const startNewBatch = (initialPartyId?: string) => {
-    setEditingDispatchId(null)
-    setSubmitAttempted(false)
+  const monthValNet = Math.round(
+    filteredDispatches
+      .filter((d) => !isRolaEntry(d))
+      .reduce((s, d) => s + (Number(d.net_val_weight) || 0), 0) * 1000
+  ) / 1000
+
+  const monthRolaNet = Math.round(
+    filteredDispatches
+      .filter((d) => isRolaEntry(d))
+      .reduce((s, d) => s + (Number(d.bore_gross_weight) || 0), 0) * 1000
+  ) / 1000
+
+  const monthDispatchedTotal = Math.round((monthValNet + monthRolaNet) * 1000) / 1000
+  const monthBilling = filteredDispatches.reduce((s, d) => s + (Number(d.amount) || 0), 0)
+
+  const handlePartyChange = (newPartyId: string) => {
+    const selectedParty = parties.find((p) => p.id === newPartyId)
+    const partyBungari = String(resolvePartyBungariWeight(selectedParty))
+    setHeader((prev) => ({ ...prev, partyId: newPartyId }))
+    setRememberedBungariWeight(partyBungari)
+  }
+
+  const startAdd = () => {
+    setEditingId(null)
+    const firstParty = parties[0]
+    const initialBungari = String(resolvePartyBungariWeight(firstParty))
+    setRememberedBungariWeight(initialBungari)
     setHeader({
-      partyId: initialPartyId || parties[0]?.id || '',
+      partyId: firstParty?.id || '',
       date: todayStr(),
       dispatchType: 'Val',
       challanNo: '',
-      ratePerKg: '',
+      tar: '8',
+      twistType: 'S',
     })
-    setBags([createBlankBag(rememberedBungariWeight)])
+    setValBags([createBlankBag()])
+    setRolaBags([createBlankBag()])
     setIsOpen(true)
     setErrorMsg(null)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const editDispatch = (d: DispatchWithParty) => {
-    setEditingDispatchId(d.id)
-    setSubmitAttempted(false)
+  const startEdit = (d: DispatchWithParty) => {
+    setEditingId(d.id)
+    const type: DispatchType = (d.dispatch_type === 'Kali' || d.dispatch_type === 'Rola') ? 'Rola' : 'Val'
 
-    const type = (d.dispatch_type as DispatchType) || 'Val'
+    // Restore bungari weight from saved record for display purposes
+    const bCount = d.bungari_count ?? 0
+    let histBungariWeight = '70'
+    if (d.bungari_weight_g) {
+      histBungariWeight = String(d.bungari_weight_g)
+    } else if (bCount > 0 && d.net_val_weight !== null && d.net_val_weight !== undefined) {
+      histBungariWeight = String(
+        Math.round(((d.bore_gross_weight - d.net_val_weight) * 1000) / bCount)
+      )
+    }
+    setRememberedBungariWeight(histBungariWeight)
+
+    // Try to infer Tar from cord_count field if present
+    const inferredTar = d.cord_count ? String(d.cord_count) : '8'
+    const inferredTwist: 'S' | 'Z' = (d.twist_type === 'Z') ? 'Z' : 'S'
+
     setHeader({
       partyId: d.party_id || parties[0]?.id || '',
       date: d.date,
       dispatchType: type,
       challanNo: d.challan_no || '',
-      ratePerKg: d.rate_per_kg !== null && d.rate_per_kg !== undefined ? String(d.rate_per_kg) : '',
+      tar: inferredTar,
+      twistType: inferredTwist,
     })
 
-    // Calculate historical bungari weight per piece if available
-    const bCount = d.bungari_count ?? 0
-    let histBungariWeight = '70'
-    if (d.bungari_weight_g) {
-      histBungariWeight = String(d.bungari_weight_g)
-    } else if (bCount > 0 && d.net_val_weight !== null) {
-      histBungariWeight = String(
-        Math.round(((d.bore_gross_weight - d.net_val_weight) * 1000) / bCount)
-      )
+    const loadedBag: BagItem = {
+      id: d.id,
+      gross: String(d.bore_gross_weight),
+      bungariCount: String(bCount),
+      rolaCount: String(d.rola_count ?? 0),
     }
 
-    setBags([
-      {
-        id: d.id,
-        grossGrams: kgToGrams(d.bore_gross_weight),
-        bungariCount: String(bCount),
-        bungariWeightGrams: histBungariWeight,
-        rolaCount: String(d.rola_count ?? 0),
-        touched: {
-          gross: true,
-          bungariCount: true,
-          bungariWeight: true,
-          rolaCount: true,
-        },
-      },
-    ])
+    if (type === 'Val') {
+      setValBags([loadedBag])
+      setRolaBags([createBlankBag()])
+    } else {
+      setRolaBags([loadedBag])
+      setValBags([createBlankBag()])
+    }
     setIsOpen(true)
     setErrorMsg(null)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const closeForm = () => {
     setIsOpen(false)
-    setEditingDispatchId(null)
-    setSubmitAttempted(false)
+    setEditingId(null)
     setErrorMsg(null)
   }
 
-  const addBagRow = () => {
-    setBags((prev) => [...prev, createBlankBag(rememberedBungariWeight)])
+  const addBag = () => {
+    if (header.dispatchType === 'Val') {
+      setValBags((prev) => [...prev, createBlankBag()])
+    } else {
+      setRolaBags((prev) => [...prev, createBlankBag()])
+    }
   }
 
-  const removeBagRow = (id: string) => {
-    if (bags.length <= 1) return
-    setBags((prev) => prev.filter((b) => b.id !== id))
+  const removeBag = (id: string) => {
+    if (header.dispatchType === 'Val') {
+      if (valBags.length <= 1) return
+      setValBags((prev) => prev.filter((b) => b.id !== id))
+    } else {
+      if (rolaBags.length <= 1) return
+      setRolaBags((prev) => prev.filter((b) => b.id !== id))
+    }
   }
 
-  const markTouched = (
-    id: string,
-    field: 'gross' | 'bungariCount' | 'bungariWeight' | 'rolaCount'
-  ) => {
-    setBags((prev) =>
-      prev.map((b) =>
-        b.id === id ? { ...b, touched: { ...b.touched, [field]: true } } : b
+  const updateBag = (id: string, field: keyof BagItem, val: string) => {
+    if (header.dispatchType === 'Val') {
+      setValBags((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, [field]: val } : b))
       )
-    )
+    } else {
+      setRolaBags((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, [field]: val } : b))
+      )
+    }
   }
 
-  const updateBagField = (
-    id: string,
-    field: keyof DispatchBagRow,
-    value: string
-  ) => {
-    if (field === 'bungariWeightGrams') {
-      const cleanVal = value.replace(/[^0-9]/g, '')
-      setRememberedBungariWeight(cleanVal)
-      try {
-        if (cleanVal) localStorage.setItem(STORAGE_KEY_BUNGARI_WEIGHT, cleanVal)
-      } catch {}
+  // Calculate tare, net & amount for a bag
+  const calcBagValues = (b: BagItem) => {
+    let grossKg = parseFloat(b.gross) || 0
+    // Auto handle if user typed grams as whole number (e.g. 18500 => 18.5 kg)
+    if (grossKg > 500) {
+      grossKg = grossKg / 1000
     }
 
-    setBags((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, [field]: value } : b))
-    )
+    if (header.dispatchType === 'Val') {
+      const bungariCount = parseInt(b.bungariCount, 10) || 0
+      // bungariWeightG resolved from party/global settings (not user-entered)
+      const bungariWeightG = parseInt(rememberedBungariWeight, 10) || 70
+      const tareKg = (bungariCount * bungariWeightG) / 1000
+      const netKg = Math.max(0, grossKg - tareKg)
+      // Rate auto-resolved from Tar + Twist settings
+      const rate = autoRate
+      const amount =
+        rate > 0 && grossKg > 0 ? Math.round(netKg * rate * 100) / 100 : null
+
+      return {
+        grossKg,
+        bungariCount,
+        bungariWeightG,
+        tareKg,
+        netKg,
+        amount,
+        rolaCount: 0,
+      }
+    } else {
+      // Rola Dispatch (Empty Spools)
+      const rolaCount = parseInt(b.rolaCount, 10) || 0
+      return {
+        grossKg,
+        bungariCount: 0,
+        bungariWeightG: 0,
+        tareKg: 0,
+        netKg: grossKg,
+        amount: null,
+        rolaCount,
+      }
+    }
   }
 
-  // Pre-calculate validations for all active bags
-  const bagValidations = bags.map((b) => ({
+  const currentBags = header.dispatchType === 'Val' ? valBags : rolaBags
+
+  const bagCalculations = currentBags.map((b) => ({
     bag: b,
-    validation: validateBag(b, header.dispatchType, header.ratePerKg),
+    ...calcBagValues(b),
   }))
 
-  const allBagsValid =
-    bags.length > 0 && bagValidations.every((bv) => bv.validation.isValid)
-  const isRateValid =
-    header.dispatchType === 'Kali' ||
-    Boolean(header.ratePerKg.trim() && parseFloat(header.ratePerKg) > 0)
-  const isHeaderValid = Boolean(header.partyId && header.date && isRateValid)
-  const canSave = allBagsValid && isHeaderValid && !saving
+  const totalGross = bagCalculations.reduce((sum, b) => sum + b.grossKg, 0)
+  const totalNet = bagCalculations.reduce((sum, b) => sum + b.netKg, 0)
+  const totalBungari = bagCalculations.reduce((sum, b) => sum + b.bungariCount, 0)
+  const totalRola = bagCalculations.reduce((sum, b) => sum + b.rolaCount, 0)
+  const totalAmount = bagCalculations.reduce((sum, b) => sum + (b.amount || 0), 0)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSubmitAttempted(true)
 
     if (!header.partyId) {
       setErrorMsg('Please select a party')
@@ -442,91 +299,74 @@ export default function Dispatch() {
     }
 
     if (!header.date) {
-      setErrorMsg('Please select a dispatch date')
+      setErrorMsg('Please select a date')
       return
     }
 
-    if (header.dispatchType === 'Val' && (!header.ratePerKg.trim() || parseFloat(header.ratePerKg) <= 0)) {
-      setErrorMsg('Rate is required for Val dispatch')
-      return
-    }
-
-    if (bags.length === 0) {
-      setErrorMsg('Please add at least one bag entry')
-      return
-    }
-
-    // Validate each bag
-    for (let i = 0; i < bagValidations.length; i++) {
-      const { validation } = bagValidations[i]
-      const bagNum = i + 1
-
-      if (validation.grossError) {
-        setErrorMsg(`Bag #${bagNum}: ${validation.grossError}`)
+    if (header.dispatchType === 'Val') {
+      if (!header.tar) {
+        setErrorMsg('Please select Tar (cord count) for Val dispatch')
         return
       }
-      if (header.dispatchType === 'Val') {
-        if (validation.bungariError) {
-          setErrorMsg(`Bag #${bagNum}: ${validation.bungariError}`)
-          return
-        }
-        if (validation.bungariWeightError) {
-          setErrorMsg(`Bag #${bagNum}: ${validation.bungariWeightError}`)
-          return
-        }
-        if (validation.tareError) {
-          setErrorMsg(`Bag #${bagNum}: ${validation.tareError}`)
-          return
-        }
-      } else {
-        if (validation.rolaError) {
-          setErrorMsg(`Bag #${bagNum}: ${validation.rolaError}`)
-          return
-        }
+    }
+
+    // Validate all bags in active mode
+    for (let i = 0; i < bagCalculations.length; i++) {
+      const { grossKg, tareKg } = bagCalculations[i]
+      const bNum = i + 1
+      if (grossKg <= 0) {
+        setErrorMsg(`Bag #${bNum}: Gross weight must be greater than 0`)
+        return
+      }
+      if (header.dispatchType === 'Val' && tareKg >= grossKg && grossKg > 0) {
+        setErrorMsg(`Bag #${bNum}: Tare (${fmtKg(tareKg)}) cannot exceed gross weight (${fmtKg(grossKg)})`)
+        return
       }
     }
 
     setSaving(true)
     setErrorMsg(null)
 
-    const rateVal =
-      header.dispatchType === 'Val' ? parseFloat(header.ratePerKg) : null
+    const rateVal = header.dispatchType === 'Val' ? autoRate : null
+    const tarNum = header.dispatchType === 'Val' ? parseInt(header.tar, 10) || null : null
 
     try {
-      if (editingDispatchId) {
+      if (editingId) {
         // Single bag update
-        const val = bagValidations[0].validation
+        const val = bagCalculations[0]
         const payload: DispatchPayload = {
           party_id: header.partyId,
           date: header.date,
           dispatch_type: header.dispatchType,
           challan_no: header.challanNo.trim() || null,
+          cord_count: tarNum,
+          twist_type: header.dispatchType === 'Val' ? header.twistType : null,
           bungari_count: header.dispatchType === 'Val' ? val.bungariCount : 0,
           bungari_weight_g: header.dispatchType === 'Val' ? val.bungariWeightG : null,
-          bore_gross_weight: val.grossG / 1000,
-          net_val_weight: header.dispatchType === 'Val' ? val.netValG / 1000 : null,
+          bore_gross_weight: val.grossKg,
+          net_val_weight: header.dispatchType === 'Val' ? val.netKg : null,
           rate_per_kg: rateVal,
           amount: val.amount,
-          rola_count: header.dispatchType === 'Kali' ? val.rolaCount : 0,
+          rola_count: header.dispatchType === 'Rola' ? val.rolaCount : 0,
         }
-
-        await updateDispatch(editingDispatchId, payload)
+        await updateDispatch(editingId, payload)
       } else {
-        // Multi-bag batch insert
-        const payloads: DispatchPayload[] = bagValidations.map(({ validation }) => ({
+        // Multi-bag batch insert for active mode
+        const payloads: DispatchPayload[] = bagCalculations.map((val) => ({
           party_id: header.partyId,
           date: header.date,
           dispatch_type: header.dispatchType,
           challan_no: header.challanNo.trim() || null,
-          bungari_count: header.dispatchType === 'Val' ? validation.bungariCount : 0,
-          bungari_weight_g: header.dispatchType === 'Val' ? validation.bungariWeightG : null,
-          bore_gross_weight: validation.grossG / 1000,
-          net_val_weight: header.dispatchType === 'Val' ? validation.netValG / 1000 : null,
+          cord_count: tarNum,
+          twist_type: header.dispatchType === 'Val' ? header.twistType : null,
+          bungari_count: header.dispatchType === 'Val' ? val.bungariCount : 0,
+          bungari_weight_g: header.dispatchType === 'Val' ? val.bungariWeightG : null,
+          bore_gross_weight: val.grossKg,
+          net_val_weight: header.dispatchType === 'Val' ? val.netKg : null,
           rate_per_kg: rateVal,
-          amount: validation.amount,
-          rola_count: header.dispatchType === 'Kali' ? validation.rolaCount : 0,
+          amount: val.amount,
+          rola_count: header.dispatchType === 'Rola' ? val.rolaCount : 0,
         }))
-
         await insertDispatches(payloads)
       }
 
@@ -553,61 +393,67 @@ export default function Dispatch() {
     }
   }
 
-  // Compute batch summary totals
-  const summary = bagValidations.reduce(
-    (acc, { validation }) => {
-      acc.totalGrossG += validation.grossG
-      acc.totalBungari += validation.bungariCount
-      acc.totalBungariTareG += validation.bungariTareG
-      acc.totalNetValG += validation.netValG
-      acc.totalAmount += validation.amount || 0
-      acc.totalRola += validation.rolaCount
-      return acc
-    },
-    {
-      totalGrossG: 0,
-      totalBungari: 0,
-      totalBungariTareG: 0,
-      totalNetValG: 0,
-      totalAmount: 0,
-      totalRola: 0,
-    }
-  )
-
-  const isEditing = Boolean(editingDispatchId)
-  const challanGroups = groupDispatchesByChallan(dispatches)
-
   return (
     <div>
       <SectionHeader
         title="Dispatch"
-        subtitle="Finished Val and Kali delivered to parties — weight, bungari, billing"
+        subtitle="Finished Val and Empty Rola delivered to parties — weight, bungari, billing"
         action={
           !isOpen &&
           parties.length > 0 && (
-            <Button onClick={() => startNewBatch()}>
-              <Plus size={16} /> New Dispatch Entry
+            <Button onClick={startAdd}>
+              <Plus size={16} /> New Dispatch
             </Button>
           )
         }
       />
 
+      {/* ── Month Summary KPIs ────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+        <KpiCard
+          label="Total Dispatched"
+          value={fmtKg(monthDispatchedTotal)}
+          sub={formattedMonth}
+          tone="positive"
+          loading={loading}
+        />
+        <KpiCard
+          label="Val Net Weight"
+          value={fmtKg(monthValNet)}
+          sub="finished jari"
+          loading={loading}
+        />
+        <KpiCard
+          label="Empty Rolas Returned"
+          value={fmtKg(monthRolaNet)}
+          sub="returned spools"
+          loading={loading}
+        />
+        <KpiCard
+          label="Dispatch Value"
+          value={fmtMoney(monthBilling)}
+          sub={formattedMonth}
+          tone="positive"
+          loading={loading}
+        />
+      </div>
+
       {errorMsg && (
         <div
-          className="rounded-lg p-3.5 mb-5 text-sm font-medium flex items-center justify-between shadow-sm"
+          className="rounded-lg p-3 mb-4 text-xs font-medium flex items-center justify-between shadow-xs"
           style={{
             background: 'var(--color-due-bg)',
             color: 'var(--color-due)',
-            border: '1px solid color-mix(in srgb, var(--color-due) 30%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--color-due) 25%, transparent)',
           }}
         >
-          <div className="flex items-center gap-2">
-            <AlertCircle size={18} className="shrink-0" />
+          <div className="flex items-center gap-1.5">
+            <AlertCircle size={15} className="shrink-0" />
             <span>{errorMsg}</span>
           </div>
           <button
             onClick={() => setErrorMsg(null)}
-            className="underline cursor-pointer text-xs ml-3 font-semibold"
+            className="underline cursor-pointer font-semibold"
           >
             Dismiss
           </button>
@@ -618,91 +464,57 @@ export default function Dispatch() {
         <EmptyState text="Add a party first before recording dispatch entries." />
       )}
 
-      {/* ── Multi-Bag Form Modal / Panel ─────────────────────────── */}
+      {/* ── Add / Edit Form (Consistent Bag-List Layout) ──────────── */}
       {isOpen && (
         <form
           onSubmit={submit}
-          noValidate
-          className="mb-8 p-4 sm:p-6 rounded-xl shadow-sm"
-          style={{
-            background: 'var(--color-card)',
-            border: '1px solid var(--color-border)',
-          }}
+          className="mb-6 p-4 rounded-lg bg-white border border-[var(--color-border)] shadow-xs"
         >
-          {/* Header Row: Title, Mode, and Dispatch Type Switcher */}
-          <div className="flex items-center justify-between pb-4 mb-4 border-b border-[var(--color-border-soft)] flex-wrap gap-3">
-            <div className="flex items-center gap-2">
-              <span
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-white"
-                style={{ background: 'var(--color-brass)' }}
-              >
-                <Layers size={16} />
-              </span>
-              <div>
-                <h3 className="font-semibold text-base" style={{ color: 'var(--color-ink)' }}>
-                  {isEditing
-                    ? `Edit ${header.dispatchType} Dispatch Entry`
-                    : `New Multi-Bag ${header.dispatchType} Dispatch`}
-                </h3>
-                <p className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                  {header.dispatchType === 'Val'
-                    ? 'Enter finished Val bags with automatic 70g Bungari tare and rate billing'
-                    : 'Enter empty Kali rola bags without Bungari or Val payment calculations'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* Dispatch Type Selector */}
-              <div className="flex items-center p-1 rounded-lg bg-[var(--color-paper)] border border-[var(--color-border)]">
-                <button
-                  type="button"
-                  disabled={isEditing}
-                  onClick={() => setHeader({ ...header, dispatchType: 'Val' })}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                    header.dispatchType === 'Val'
-                      ? 'bg-[var(--color-brass)] text-white shadow-sm'
-                      : 'text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]'
-                  }`}
-                >
-                  Val Dispatch
-                </button>
-                <button
-                  type="button"
-                  disabled={isEditing}
-                  onClick={() => setHeader({ ...header, dispatchType: 'Kali' })}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                    header.dispatchType === 'Kali'
-                      ? 'bg-[var(--color-brass)] text-white shadow-sm'
-                      : 'text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]'
-                  }`}
-                >
-                  Kali Dispatch
-                </button>
-              </div>
-
-              <Button
+          {/* 1. Leading Prominent Segmented Toggle */}
+          <div className="mb-4 pb-3 border-b border-[var(--color-border-soft)]">
+            <div className="grid grid-cols-2 p-1 rounded-xl bg-[var(--color-paper)] border border-[var(--color-border)] gap-1 shadow-inner">
+              <button
                 type="button"
-                variant="ghost"
-                onClick={closeForm}
-                disabled={saving}
-                className="px-2 py-1 text-xs"
+                disabled={Boolean(editingId)}
+                onClick={() => setHeader({ ...header, dispatchType: 'Val' })}
+                className={`min-h-[42px] px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold tracking-wide transition-all cursor-pointer flex items-center justify-center text-center ${
+                  header.dispatchType === 'Val'
+                    ? 'bg-[var(--color-brass)] text-white shadow-xs font-bold'
+                    : 'text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] hover:bg-white/70'
+                } disabled:opacity-60 disabled:cursor-not-allowed`}
+                title="Finished Goods (Val) — Billable"
               >
-                <X size={15} /> Close
-              </Button>
+                Val (Finished Goods)
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(editingId)}
+                onClick={() => setHeader({ ...header, dispatchType: 'Rola' })}
+                className={`min-h-[42px] px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold tracking-wide transition-all cursor-pointer flex items-center justify-center text-center ${
+                  header.dispatchType === 'Rola'
+                    ? 'bg-[var(--color-brass)] text-white shadow-xs font-bold'
+                    : 'text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] hover:bg-white/70'
+                } disabled:opacity-60 disabled:cursor-not-allowed`}
+                title="Empty Spools Return (Rola) — Non-billable"
+              >
+                Rola (Empty Return)
+              </button>
             </div>
           </div>
 
-          {/* Common Batch Details Header */}
+          {/* 2. Top Header Row: Party, Date, Tar+S/Z (Val only), Challan */}
           <div
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 rounded-lg mb-6"
-            style={{ background: 'var(--color-paper)', border: '1px solid var(--color-border-soft)' }}
+            className={`grid gap-3 mb-4 pb-3 border-b border-[var(--color-border-soft)] ${
+              header.dispatchType === 'Val'
+                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-5'
+                : 'grid-cols-1 sm:grid-cols-3'
+            }`}
           >
             <Field label="Party *">
               <Select
                 required
                 value={header.partyId}
-                onChange={(e) => setHeader({ ...header, partyId: e.target.value })}
+                onChange={(e) => handlePartyChange(e.target.value)}
               >
                 {parties.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -712,897 +524,432 @@ export default function Dispatch() {
               </Select>
             </Field>
 
-            <Field label="Dispatch Date *">
-              <TextInput
+            <Field label="Date">
+              <input
                 type="date"
                 required
                 value={header.date}
                 onChange={(e) => setHeader({ ...header, date: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border text-sm text-[var(--color-ink)] bg-white focus:outline-hidden focus:ring-2 focus:ring-[var(--color-brass)]"
+                style={{ borderColor: 'var(--color-border)' }}
               />
             </Field>
 
-            <Field label="Challan Number (Optional)">
-              <TextInput
+            {header.dispatchType === 'Val' && (
+              <>
+                <Field label="Tar (Cord Count) *">
+                  <Select
+                    required
+                    value={header.tar}
+                    onChange={(e) => setHeader({ ...header, tar: e.target.value })}
+                  >
+                    {TAR_OPTIONS.map((t) => (
+                      <option key={t} value={String(t)}>{t} Tar</option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <Field label="Type (S / Z) *">
+                  <div className="grid grid-cols-2 gap-1.5 h-full">
+                    {(['S', 'Z'] as const).map((twist) => (
+                      <button
+                        key={twist}
+                        type="button"
+                        onClick={() => setHeader({ ...header, twistType: twist })}
+                        className={`py-2 rounded-lg text-sm font-bold transition-all cursor-pointer border ${
+                          header.twistType === twist
+                            ? 'bg-[var(--color-brass)] text-white border-[var(--color-brass)] shadow-xs'
+                            : 'bg-white text-[var(--color-ink-soft)] border-[var(--color-border)] hover:border-[var(--color-brass)]/60 hover:text-[var(--color-ink)]'
+                        }`}
+                      >
+                        {twist}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                {/* Auto-computed rate display */}
+                <Field label="Rate (auto)">
+                  <div className="flex items-center h-full px-3 py-2 rounded-lg border bg-[var(--color-paper)] text-sm font-bold tabular-nums" style={{ borderColor: 'var(--color-border)', color: 'var(--color-brass)' }}>
+                    ₹{autoRate}/kg
+                    <span className="ml-auto text-[10px] font-normal text-[var(--color-ink-soft)]">{header.tar}T·{header.twistType}</span>
+                  </div>
+                </Field>
+              </>
+            )}
+
+            <Field label="Challan Number">
+              <input
+                type="text"
                 placeholder="e.g. CH-200"
                 value={header.challanNo}
                 onChange={(e) => setHeader({ ...header, challanNo: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border text-sm text-[var(--color-ink)] bg-white focus:outline-hidden focus:ring-2 focus:ring-[var(--color-brass)]"
+                style={{ borderColor: 'var(--color-border)' }}
               />
             </Field>
-
-            {/* Rate is required for Val, hidden for Kali */}
-            {header.dispatchType === 'Val' ? (
-              <Field label="Rate (₹/kg) *">
-                <TextInput
-                  required
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="e.g. 20"
-                  value={header.ratePerKg}
-                  style={{
-                    borderColor:
-                      submitAttempted && (!header.ratePerKg.trim() || parseFloat(header.ratePerKg) <= 0)
-                        ? 'var(--color-due)'
-                        : undefined,
-                  }}
-                  onChange={(e) => setHeader({ ...header, ratePerKg: e.target.value })}
-                />
-                {submitAttempted && (!header.ratePerKg.trim() || parseFloat(header.ratePerKg) <= 0) ? (
-                  <span className="text-xs font-medium mt-1 flex items-center gap-1" style={{ color: 'var(--color-due)' }}>
-                    <AlertCircle size={11} className="shrink-0" /> Rate is required
-                  </span>
-                ) : (
-                  <span className="text-xs mt-0.5" style={{ color: 'var(--color-ink-soft)' }}>
-                    Rate per kg of Net Val
-                  </span>
-                )}
-              </Field>
-            ) : (
-              <Field label="Type">
-                <div
-                  className="px-3 py-2 rounded-md text-sm font-semibold flex items-center min-h-[38px]"
-                  style={{ background: 'var(--color-border-soft)', color: 'var(--color-ink)' }}
-                >
-                  Empty Rola (Kali)
-                </div>
-              </Field>
-            )}
           </div>
 
-          {/* Bags List Section */}
-          <div className="mb-6">
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--color-ink)' }}>
-                {header.dispatchType} Bag Entries ({bags.length})
-              </h4>
-              <p className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                {header.dispatchType === 'Val'
-                  ? 'Enter Bore Gross (g) & Bungari count — Net Val & Billing calculate automatically.'
-                  : 'Enter Gross weight (g) & Rola count for each Kali bag.'}
-              </p>
+          {/* 3. Bag Entries Section */}
+          <div className="space-y-2.5 mb-4">
+            <div className="flex items-center justify-between text-xs font-medium text-[var(--color-ink-soft)] px-1 flex-wrap gap-2">
+              <span className="font-semibold text-[var(--color-ink)]">
+                Bag Entries ({currentBags.length})
+              </span>
+              {header.dispatchType === 'Val' && (
+                <span className="text-[11px] text-[var(--color-ink-soft)] bg-[var(--color-paper)] px-2 py-1 rounded border border-[var(--color-border-soft)]">
+                  Bungri: <strong className="text-[var(--color-ink)]">{rememberedBungariWeight}g</strong> per piece
+                  {(() => {
+                    const selectedP = parties.find((p) => p.id === header.partyId)
+                    const isCustom = Boolean(selectedP?.default_bungari_weight_g)
+                    return isCustom ? <span className="ml-1 text-[var(--color-brass)] font-semibold">(Party)</span> : <span className="ml-1">(Global)</span>
+                  })()}
+                </span>
+              )}
             </div>
 
-            <div className="flex flex-col gap-3.5">
-              {bagValidations.map(({ bag: b, validation }, index) => {
-                const showGrossError =
-                  Boolean(validation.grossError) &&
-                  (b.touched?.gross || submitAttempted)
-                const showBungariError =
-                  Boolean(validation.bungariError) &&
-                  (b.touched?.bungariCount || submitAttempted)
-                const showBungariWeightError =
-                  Boolean(validation.bungariWeightError) &&
-                  (b.touched?.bungariWeight || submitAttempted)
-                const showRolaError =
-                  Boolean(validation.rolaError) &&
-                  (b.touched?.rolaCount || submitAttempted)
-                const isTareInvalid = Boolean(validation.tareError)
-
-                return (
-                  <div
-                    key={b.id}
-                    className="p-4 rounded-xl transition-all"
-                    style={{
-                      background: '#ffffff',
-                      border:
-                        validation.isValid
-                          ? '1px solid var(--color-border)'
-                          : showGrossError || showBungariError || showBungariWeightError || showRolaError || isTareInvalid
-                          ? '1.5px solid var(--color-due)'
-                          : '1px solid var(--color-border)',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                    }}
-                  >
-                    {/* Bag Card Top Bar */}
-                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-[var(--color-border-soft)]">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wide"
-                          style={{
-                            background: 'var(--color-border-soft)',
-                            color: 'var(--color-ink)',
-                          }}
-                        >
-                          Bag {index + 1}
-                        </span>
-
-                        {/* Status Badge */}
-                        {validation.isValid ? (
-                          <span
-                            className="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1"
-                            style={{
-                              background: 'var(--color-positive-bg)',
-                              color: 'var(--color-positive)',
-                            }}
-                          >
-                            <Check size={12} strokeWidth={2.5} /> Complete
-                          </span>
-                        ) : (
-                          <span
-                            className="px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1"
-                            style={{
-                              background: 'var(--color-due-bg)',
-                              color: 'var(--color-due)',
-                            }}
-                          >
-                            <AlertCircle size={12} /> Incomplete
-                          </span>
-                        )}
-
-                        {validation.isValid && header.dispatchType === 'Val' && (
-                          <span className="text-xs font-semibold ml-1" style={{ color: 'var(--color-brass)' }}>
-                            Net Val: {fmtKg(validation.netValG / 1000)}
-                            {validation.amount !== null && ` • ${fmtMoney(validation.amount)}`}
-                          </span>
-                        )}
-                      </div>
-
-                      {!isEditing && bags.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeBagRow(b.id)}
-                          className="text-xs font-medium inline-flex items-center gap-1 p-1 rounded cursor-pointer transition-colors"
-                          style={{ color: 'var(--color-due)' }}
-                          title="Remove Bag"
-                        >
-                          <Trash2 size={13} /> Remove Bag
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Inputs & Calculations Grid */}
+            {/* Per-Bag Rows */}
+            {bagCalculations.map(({ bag: b, tareKg, netKg, amount, rolaCount }, idx) => (
+              <div
+                key={b.id}
+                className="p-2.5 sm:p-2 rounded-lg bg-[var(--color-paper)] border border-[var(--color-border-soft)] text-xs flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5"
+              >
+                {/* Mobile Strip Top: Bag title & Results */}
+                <div className="flex items-center justify-between sm:hidden pb-1 border-b border-[var(--color-border-soft)]">
+                  <span className="font-bold text-xs text-[var(--color-ink)]">
+                    Bag {idx + 1}
+                  </span>
+                  <div className="flex items-center gap-1.5 text-xs">
                     {header.dispatchType === 'Val' ? (
-                      /* Val Fields */
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 items-start">
-                        {/* 1. Bore Gross Weight (grams) */}
-                        <Field label="Bore Gross (grams) *">
-                          <TextInput
-                            required
-                            type="number"
-                            inputMode="numeric"
-                            step="1"
-                            min="1"
-                            placeholder="e.g. 18500"
-                            value={b.grossGrams}
-                            style={{
-                              borderColor: showGrossError ? 'var(--color-due)' : undefined,
-                            }}
-                            onBlur={() => markTouched(b.id, 'gross')}
-                            onChange={(e) => {
-                              const val = e.target.value.replace(/[^0-9]/g, '')
-                              updateBagField(b.id, 'grossGrams', val)
-                            }}
-                          />
-                          {showGrossError ? (
-                            <span
-                              className="text-xs font-medium mt-1 flex items-center gap-1"
-                              style={{ color: 'var(--color-due)' }}
-                            >
-                              <AlertCircle size={11} className="shrink-0" />
-                              {validation.grossError}
-                            </span>
-                          ) : (
-                            <div className="flex items-center justify-between text-xs mt-0.5">
-                              <span style={{ color: 'var(--color-ink-soft)' }}>Enter in grams</span>
-                              {validation.grossG > 0 && (
-                                <span
-                                  className="font-bold tabular-nums"
-                                  style={{ color: 'var(--color-brass)' }}
-                                >
-                                  = {fmtKg(validation.grossG / 1000)}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </Field>
-
-                        {/* 2. Bungari Count */}
-                        <Field label="Bungari Count *">
-                          <TextInput
-                            required
-                            type="number"
-                            inputMode="numeric"
-                            step="1"
-                            min="0"
-                            placeholder="e.g. 12"
-                            value={b.bungariCount}
-                            style={{
-                              borderColor: showBungariError ? 'var(--color-due)' : undefined,
-                            }}
-                            onBlur={() => markTouched(b.id, 'bungariCount')}
-                            onChange={(e) => {
-                              const val = sanitizeNumberString(e.target.value)
-                              updateBagField(b.id, 'bungariCount', val)
-                            }}
-                          />
-                          {showBungariError ? (
-                            <span
-                              className="text-xs font-medium mt-1 flex items-center gap-1"
-                              style={{ color: 'var(--color-due)' }}
-                            >
-                              <AlertCircle size={11} className="shrink-0" />
-                              {validation.bungariError}
-                            </span>
-                          ) : (
-                            <span className="text-xs mt-0.5" style={{ color: 'var(--color-ink-soft)' }}>
-                              Bungari pieces
-                            </span>
-                          )}
-                        </Field>
-
-                        {/* 3. Bungari Weight per piece (g) */}
-                        <Field label="Bungari Wt / pc (g)">
-                          <TextInput
-                            type="number"
-                            inputMode="numeric"
-                            step="1"
-                            min="1"
-                            placeholder="e.g. 70"
-                            value={b.bungariWeightGrams}
-                            style={{
-                              borderColor: showBungariWeightError ? 'var(--color-due)' : undefined,
-                            }}
-                            onBlur={() => markTouched(b.id, 'bungariWeight')}
-                            onChange={(e) =>
-                              updateBagField(b.id, 'bungariWeightGrams', e.target.value)
-                            }
-                          />
-                          <div className="flex items-center justify-between text-xs mt-0.5">
-                            <span style={{ color: 'var(--color-ink-soft)' }}>Default 70g</span>
-                            <span className="text-[11px]" style={{ color: 'var(--color-ink-soft)' }}>
-                              ({validation.bungariWeightG}g/pc)
-                            </span>
-                          </div>
-                        </Field>
-
-                        {/* 4. Calculated Bungari Tare Weight */}
-                        <Field label="Bungari Tare (calc)">
-                          <div
-                            className="px-3 py-2 rounded-md text-sm font-semibold tabular-nums flex items-center justify-between min-h-[38px]"
-                            style={{
-                              background: isTareInvalid
-                                ? 'var(--color-due-bg)'
-                                : 'var(--color-paper)',
-                              border: `1px solid ${
-                                isTareInvalid ? 'var(--color-due)' : 'var(--color-border)'
-                              }`,
-                              color: isTareInvalid
-                                ? 'var(--color-due)'
-                                : 'var(--color-ink)',
-                            }}
-                          >
-                            <span>{fmtKg(validation.bungariTareG / 1000)}</span>
-                            <span
-                              className="text-xs font-normal"
-                              style={{
-                                color: isTareInvalid
-                                  ? 'var(--color-due)'
-                                  : 'var(--color-ink-soft)',
-                              }}
-                            >
-                              {validation.bungariTareG.toLocaleString('en-IN')} g
-                            </span>
-                          </div>
-                          <span
-                            className="text-[11px] mt-0.5 block"
-                            style={{
-                              color: isTareInvalid ? 'var(--color-due)' : 'var(--color-ink-soft)',
-                            }}
-                          >
-                            {isTareInvalid
-                              ? validation.tareError
-                              : 'Bungari Count × 70g'}
-                          </span>
-                        </Field>
-
-                        {/* 5. Calculated Net Val Weight */}
-                        <Field label="Net Val Weight">
-                          <div
-                            className="px-3 py-2 rounded-md text-sm font-bold tabular-nums flex items-center justify-between min-h-[38px]"
-                            style={{
-                              background: isTareInvalid
-                                ? 'var(--color-due-bg)'
-                                : validation.grossG > 0
-                                ? 'var(--color-border-soft)'
-                                : 'var(--color-paper)',
-                              border: `1px solid ${
-                                isTareInvalid ? 'var(--color-due)' : 'var(--color-border)'
-                              }`,
-                              color: isTareInvalid
-                                ? 'var(--color-due)'
-                                : validation.grossG > 0
-                                ? 'var(--color-brass)'
-                                : 'var(--color-ink-soft)',
-                            }}
-                          >
-                            <span>{validation.grossG > 0 ? fmtKg(validation.netValG / 1000) : '—'}</span>
-                            {validation.grossG > 0 && (
-                              <span
-                                className="text-xs font-normal"
-                                style={{ color: 'var(--color-ink-soft)' }}
-                              >
-                                {validation.netValG.toLocaleString('en-IN')} g
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[11px] mt-0.5" style={{ color: 'var(--color-ink-soft)' }}>
-                            Bore Gross − Bungari
-                          </span>
-                        </Field>
-
-                        {/* 6. Calculated Amount */}
-                        <Field label="Bag Amount">
-                          <div
-                            className="px-3 py-2 rounded-md text-sm font-bold tabular-nums flex items-center justify-between min-h-[38px]"
-                            style={{
-                              background: 'var(--color-paper)',
-                              border: '1px solid var(--color-border)',
-                              color: 'var(--color-ink)',
-                            }}
-                          >
-                            <span>
-                              {validation.amount !== null
-                                ? fmtMoney(validation.amount)
-                                : '—'}
-                            </span>
-                            {validation.amount !== null && (
-                              <span className="text-[11px] font-normal" style={{ color: 'var(--color-ink-soft)' }}>
-                                @ ₹{header.ratePerKg}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[11px] mt-0.5" style={{ color: 'var(--color-ink-soft)' }}>
-                            Net Val × Rate
-                          </span>
-                        </Field>
-                      </div>
+                      <>
+                        <span className="text-[var(--color-ink-soft)]">
+                          Tare: <strong className="font-medium text-[var(--color-ink)]">{fmtKg(tareKg)}</strong> · Net: <strong className="text-[var(--color-brass)]">{fmtKg(netKg)}</strong>
+                        </span>
+                        {amount !== null && (
+                          <>
+                            <span>·</span>
+                            <strong className="text-[var(--color-brass)]">{fmtMoney(amount)}</strong>
+                          </>
+                        )}
+                      </>
                     ) : (
-                      /* Kali Fields */
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-start">
-                        {/* 1. Gross Weight Input (grams) */}
-                        <Field label="Gross Weight (grams) *">
-                          <TextInput
-                            required
-                            type="number"
-                            inputMode="numeric"
-                            step="1"
-                            min="1"
-                            placeholder="e.g. 15000"
-                            value={b.grossGrams}
-                            style={{
-                              borderColor: showGrossError ? 'var(--color-due)' : undefined,
-                            }}
-                            onBlur={() => markTouched(b.id, 'gross')}
-                            onChange={(e) => {
-                              const val = e.target.value.replace(/[^0-9]/g, '')
-                              updateBagField(b.id, 'grossGrams', val)
-                            }}
-                          />
-                          {showGrossError ? (
-                            <span
-                              className="text-xs font-medium mt-1 flex items-center gap-1"
-                              style={{ color: 'var(--color-due)' }}
-                            >
-                              <AlertCircle size={11} className="shrink-0" />
-                              {validation.grossError}
-                            </span>
-                          ) : (
-                            <div className="flex items-center justify-between text-xs mt-0.5">
-                              <span style={{ color: 'var(--color-ink-soft)' }}>Enter in grams</span>
-                              {validation.grossG > 0 && (
-                                <span
-                                  className="font-bold tabular-nums"
-                                  style={{ color: 'var(--color-brass)' }}
-                                >
-                                  = {fmtKg(validation.grossG / 1000)}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </Field>
-
-                        {/* 2. Rola Count Input */}
-                        <Field label="Rola Count *">
-                          <TextInput
-                            required
-                            type="number"
-                            inputMode="numeric"
-                            step="1"
-                            min="0"
-                            placeholder="e.g. 50"
-                            value={b.rolaCount}
-                            style={{
-                              borderColor: showRolaError ? 'var(--color-due)' : undefined,
-                            }}
-                            onBlur={() => markTouched(b.id, 'rolaCount')}
-                            onChange={(e) => {
-                              const val = sanitizeNumberString(e.target.value)
-                              updateBagField(b.id, 'rolaCount', val)
-                            }}
-                          />
-                          {showRolaError ? (
-                            <span
-                              className="text-xs font-medium mt-1 flex items-center gap-1"
-                              style={{ color: 'var(--color-due)' }}
-                            >
-                              <AlertCircle size={11} className="shrink-0" />
-                              {validation.rolaError}
-                            </span>
-                          ) : (
-                            <span className="text-xs mt-0.5" style={{ color: 'var(--color-ink-soft)' }}>
-                              Empty rola pieces in bag
-                            </span>
-                          )}
-                        </Field>
-                      </div>
+                      <span className="text-[var(--color-ink)] font-semibold">
+                        Rola: <strong className="text-[var(--color-brass)]">{rolaCount} pcs</strong>
+                      </span>
+                    )}
+                    {currentBags.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeBag(b.id)}
+                        className="p-1 text-[var(--color-due)] hover:opacity-75 cursor-pointer ml-1"
+                        title="Remove bag"
+                        aria-label="Remove bag"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     )}
                   </div>
-                )
-              })}
-            </div>
+                </div>
 
-            {/* ONLY ONE Add Button: at the bottom of the bag list */}
-            {!isEditing && (
-              <div className="mt-3.5">
+                {/* Desktop Bag # label */}
+                <span className="hidden sm:inline-block font-semibold text-xs text-[var(--color-ink)] w-12 shrink-0">
+                  Bag {idx + 1}
+                </span>
+
+                {/* Inputs Row */}
+                <div className="grid grid-cols-3 sm:flex sm:items-center gap-2 flex-1">
+                  {/* Gross Input */}
+                  <div className="col-span-1 sm:flex-1 min-w-0">
+                    <label className="block sm:hidden text-[10px] text-[var(--color-ink-soft)] mb-0.5 font-medium">
+                      Gross (kg)
+                    </label>
+                    <input
+                      required
+                      type="number"
+                      step="0.001"
+                      min="0.001"
+                      placeholder="Gross (kg)"
+                      className="w-full px-2 py-1.5 rounded border bg-white text-xs tabular-nums outline-none"
+                      style={{ borderColor: 'var(--color-border)' }}
+                      value={b.gross}
+                      onChange={(e) => updateBag(b.id, 'gross', e.target.value)}
+                    />
+                  </div>
+
+                  {header.dispatchType === 'Val' ? (
+                    <>
+                      {/* Bungari Count Input only — weight is auto from settings */}
+                      <div className="col-span-1 sm:w-24 min-w-0">
+                        <label className="block sm:hidden text-[10px] text-[var(--color-ink-soft)] mb-0.5 font-medium">
+                          Bungri Count
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="Bungri #"
+                          className="w-full px-2 py-1.5 rounded border bg-white text-xs tabular-nums outline-none"
+                          style={{ borderColor: 'var(--color-border)' }}
+                          value={b.bungariCount}
+                          onChange={(e) => updateBag(b.id, 'bungariCount', e.target.value)}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    /* Rola Count Input (Rola mode) */
+                    <div className="col-span-2 sm:w-32 min-w-0">
+                      <label className="block sm:hidden text-[10px] text-[var(--color-ink-soft)] mb-0.5 font-medium">
+                        Rola Count
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Rola Count"
+                        className="w-full px-2 py-1.5 rounded border bg-white text-xs tabular-nums outline-none"
+                        style={{ borderColor: 'var(--color-border)' }}
+                        value={b.rolaCount}
+                        onChange={(e) => updateBag(b.id, 'rolaCount', e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Desktop Results */}
+                {header.dispatchType === 'Val' ? (
+                  <>
+                    <div className="hidden sm:block text-right tabular-nums text-[var(--color-ink-soft)] shrink-0 whitespace-nowrap">
+                      Tare: <strong className="font-medium text-[var(--color-ink)]">{fmtKg(tareKg)}</strong> · Net: <strong className="text-[var(--color-brass)]">{fmtKg(netKg)}</strong>
+                    </div>
+
+                    <div className="hidden sm:block text-right tabular-nums text-[var(--color-brass)] shrink-0 w-20 font-bold">
+                      {amount !== null ? fmtMoney(amount) : '—'}
+                    </div>
+                  </>
+                ) : (
+                  <div className="hidden sm:block text-right tabular-nums text-[var(--color-ink)] shrink-0 w-28 font-semibold">
+                    Rola: <strong className="text-[var(--color-brass)]">{rolaCount} pcs</strong>
+                  </div>
+                )}
+
+                {currentBags.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeBag(b.id)}
+                    className="hidden sm:block p-1 text-[var(--color-due)] hover:opacity-75 cursor-pointer shrink-0"
+                    title="Remove bag"
+                    aria-label="Remove bag"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* 4. Action Footer */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[var(--color-border-soft)]">
+            <div className="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto">
+              {!editingId ? (
                 <button
                   type="button"
-                  onClick={addBagRow}
-                  className="w-full py-2.5 px-4 rounded-xl border border-dashed text-sm font-medium flex items-center justify-center gap-2 cursor-pointer hover:bg-[#fbf9f4] transition-colors"
-                  style={{
-                    borderColor: 'var(--color-brass)',
-                    color: 'var(--color-brass)',
-                    background: 'transparent',
-                  }}
+                  onClick={addBag}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-md text-xs font-medium text-[var(--color-brass)] bg-[var(--color-paper)] border border-[var(--color-brass)]/35 hover:border-[var(--color-brass)] hover:bg-white transition-all cursor-pointer shadow-2xs active:scale-[0.98]"
                 >
-                  <Plus size={16} /> Add Another Bag
+                  <Plus size={14} strokeWidth={2.5} /> Add Another
                 </button>
-              </div>
-            )}
-          </div>
+              ) : <div />}
 
-          {/* Batch Summary Box */}
-          <div
-            className="p-4 sm:p-5 rounded-xl mb-6 flex flex-col gap-3"
-            style={{
-              background: 'linear-gradient(135deg, #fbf9f5 0%, #f4eee1 100%)',
-              border: '1px solid var(--color-border)',
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--color-brass)' }}>
-                <Sparkles size={14} /> {header.dispatchType} Batch Summary
-              </span>
-              <span className="text-xs font-medium" style={{ color: 'var(--color-ink-soft)' }}>
-                {header.dispatchType === 'Val'
-                  ? header.ratePerKg
-                    ? `Rate: ₹${header.ratePerKg}/kg`
-                    : 'Rate: Not set'
-                  : 'Type: Kali (No Billing)'}
-              </span>
+              <div className="sm:hidden text-xs text-right">
+                {header.dispatchType === 'Val' ? (
+                  <>
+                    <span className="text-[var(--color-ink-soft)]">Total Net: </span>
+                    <strong className="text-sm font-bold text-[var(--color-brass)] tabular-nums">
+                      {fmtKg(totalNet)}
+                    </strong>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[var(--color-ink-soft)]">Total Gross: </span>
+                    <strong className="text-sm font-bold text-[var(--color-brass)] tabular-nums">
+                      {fmtKg(totalGross)}
+                    </strong>
+                  </>
+                )}
+              </div>
             </div>
 
-            {header.dispatchType === 'Val' ? (
-              /* Val Summary */
-              <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 pt-1">
-                <div className="flex flex-col">
-                  <span className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                    Total Bags
-                  </span>
-                  <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-ink)' }}>
-                    {bags.length}
-                  </span>
-                </div>
-
-                <div className="flex flex-col">
-                  <span className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                    Total Bore Gross
-                  </span>
-                  <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-ink)' }}>
-                    {fmtKg(summary.totalGrossG / 1000)}
-                  </span>
-                </div>
-
-                <div className="flex flex-col">
-                  <span className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                    Total Bungari
-                  </span>
-                  <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-ink)' }}>
-                    {summary.totalBungari} pcs
-                  </span>
-                </div>
-
-                <div className="flex flex-col">
-                  <span className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                    Bungari Tare
-                  </span>
-                  <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-ink)' }}>
-                    {fmtKg(summary.totalBungariTareG / 1000)}
-                  </span>
-                </div>
-
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold" style={{ color: 'var(--color-brass)' }}>
-                    Total Net Val
-                  </span>
-                  <span className="text-xl font-extrabold tabular-nums" style={{ color: 'var(--color-brass)' }}>
-                    {fmtKg(summary.totalNetValG / 1000)}
-                  </span>
-                </div>
-
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold" style={{ color: 'var(--color-brass)' }}>
-                    Total Amount
-                  </span>
-                  <span className="text-xl font-extrabold tabular-nums" style={{ color: 'var(--color-brass)' }}>
-                    {fmtMoney(summary.totalAmount)}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              /* Kali Summary */
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
-                <div className="flex flex-col">
-                  <span className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                    Total Bags
-                  </span>
-                  <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-ink)' }}>
-                    {bags.length}
-                  </span>
-                </div>
-
-                <div className="flex flex-col">
-                  <span className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                    Total Gross Weight
-                  </span>
-                  <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-ink)' }}>
-                    {fmtKg(summary.totalGrossG / 1000)}
-                  </span>
-                  <span className="text-[11px]" style={{ color: 'var(--color-ink-soft)' }}>
-                    ({summary.totalGrossG.toLocaleString('en-IN')} g)
-                  </span>
-                </div>
-
-                <div className="flex flex-col">
-                  <span className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                    Total Rola Count
-                  </span>
-                  <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-ink)' }}>
-                    {summary.totalRola} pcs
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Form Actions */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <Button
-              type="submit"
-              disabled={!canSave}
-              className="py-2.5 px-5 font-semibold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Check size={16} />{' '}
-              {saving
-                ? 'Saving…'
-                : isEditing
-                ? 'Update Dispatch'
-                : bags.length > 1
-                ? `Save All Entries (${bags.length} Bags)`
-                : 'Save Entry'}
-            </Button>
-
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={closeForm}
-              disabled={saving}
-              className="py-2.5 px-4 text-sm"
-            >
-              Cancel
-            </Button>
-
-            {!canSave && (
-              <span className="text-xs font-medium flex items-center gap-1" style={{ color: 'var(--color-due)' }}>
-                <AlertCircle size={13} className="shrink-0" />
-                {header.dispatchType === 'Val' && (!header.ratePerKg.trim() || parseFloat(header.ratePerKg) <= 0)
-                  ? 'Please enter a valid Rate (₹/kg) and complete all bag entries'
-                  : 'Fill all required fields in each bag to enable save'}
+            <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+              <span className="text-xs text-[var(--color-ink-soft)] hidden sm:inline">
+                {header.dispatchType === 'Val' ? (
+                  <>
+                    Total Net:{' '}
+                    <strong className="text-sm font-bold text-[var(--color-brass)]">
+                      {fmtKg(totalNet)}
+                    </strong>{' '}
+                    ({currentBags.length} {currentBags.length === 1 ? 'bag' : 'bags'} · Gross: {fmtKg(totalGross)} · {totalBungari} bungari{totalAmount > 0 ? ` · ${fmtMoney(totalAmount)}` : ''})
+                  </>
+                ) : (
+                  <>
+                    Total Gross:{' '}
+                    <strong className="text-sm font-bold text-[var(--color-brass)]">
+                      {fmtKg(totalGross)}
+                    </strong>{' '}
+                    ({currentBags.length} {currentBags.length === 1 ? 'bag' : 'bags'} · {totalRola} rola spools)
+                  </>
+                )}
               </span>
-            )}
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={closeForm}
+                  disabled={saving}
+                  className="flex-1 sm:flex-none py-2"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 sm:flex-none py-2"
+                >
+                  <Check size={16} />{' '}
+                  {saving ? 'Saving…' : editingId ? 'Update' : currentBags.length > 1 ? `Save (${currentBags.length} Bags)` : 'Save'}
+                </Button>
+              </div>
+            </div>
           </div>
         </form>
       )}
 
-      {/* ── Challan-Grouped Table View ─────────────────────────────── */}
-      {dispatches.length === 0 && !loading ? (
-        <EmptyState text="No dispatch entries yet." />
+      {/* ── Flat Table View ───────────────────────────────────────── */}
+      {filteredDispatches.length === 0 && !loading ? (
+        <EmptyState text={`No dispatch entries found for ${formattedMonth}.`} />
       ) : (
         <div
-          className="overflow-x-auto rounded-lg bg-white shadow-sm"
+          className="overflow-x-auto rounded-lg bg-white shadow-xs"
           style={{ border: '1px solid var(--color-border)' }}
         >
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full text-sm border-collapse min-w-[720px]">
             <thead>
               <tr style={{ background: 'var(--color-border-soft)' }}>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
-                  Bag #
-                </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
                   Date
                 </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
                   Party
                 </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
                   Type
                 </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
-                  Bore Gross (kg)
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
+                  Gross (kg)
                 </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
-                  Bungari
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
+                  Bungari / Rola
                 </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
+                  Tare (kg)
+                </th>
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
                   Net Val (kg)
                 </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
                   Rate
                 </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
                   Amount
                 </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
                   Challan #
                 </th>
-                <th
-                  className="text-right px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
-                  Actions
-                </th>
+                <th className="text-right px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {challanGroups.map((group, groupIdx) => {
-                // Alternating visual treatment per CHALLAN GROUP
-                const groupBg = groupIdx % 2 === 0 ? '#ffffff' : '#fcfbf7'
-                const isGroupVal = group.dispatchType === 'Val'
+              {filteredDispatches.map((d) => {
+                const isRola = d.dispatch_type === 'Kali' || d.dispatch_type === 'Rola'
+                const isVal = !isRola
+                const tareKg = isVal && d.net_val_weight !== null
+                  ? Math.max(0, d.bore_gross_weight - d.net_val_weight)
+                  : 0
 
                 return (
-                  <Fragment key={group.id}>
-                    {/* Group Subheader Strip */}
-                    <tr
-                      style={{
-                        background:
-                          groupIdx % 2 === 0
-                            ? 'rgba(0,0,0,0.015)'
-                            : 'rgba(197, 160, 89, 0.06)',
-                        borderTop: groupIdx > 0 ? '2px solid var(--color-border)' : 'none',
-                        borderBottom: '1px solid var(--color-border-soft)',
-                      }}
-                    >
-                      <td colSpan={11} className="px-3 py-1.5 text-xs">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2">
-                            {group.challanNo ? (
-                              <span
-                                className="px-2 py-0.5 rounded font-bold text-xs tracking-wide"
-                                style={{
-                                  background: 'var(--color-border-soft)',
-                                  color: 'var(--color-ink)',
-                                }}
-                              >
-                                Challan #{group.challanNo}
-                              </span>
-                            ) : (
-                              <span
-                                className="px-2 py-0.5 rounded text-[11px] font-medium"
-                                style={{
-                                  background: 'var(--color-paper)',
-                                  color: 'var(--color-ink-soft)',
-                                }}
-                              >
-                                Challan: —
-                              </span>
-                            )}
-                            <span className="font-semibold" style={{ color: 'var(--color-ink)' }}>
-                              {group.partyName}
-                            </span>
-                            <span style={{ color: 'var(--color-ink-soft)' }}>
-                              • {fmtDate(group.date)}
-                            </span>
-                            <span
-                              className="px-2 py-0.5 rounded text-[10px] font-bold"
-                              style={{
-                                background: isGroupVal ? 'var(--color-border-soft)' : '#fef3c7',
-                                color: isGroupVal ? 'var(--color-ink)' : '#92400e',
-                              }}
-                            >
-                              {group.dispatchType}
-                            </span>
-                            <span style={{ color: 'var(--color-ink-soft)' }}>
-                              • {group.dispatches.length} {group.dispatches.length === 1 ? 'Bag' : 'Bags'}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-3 text-[11px]" style={{ color: 'var(--color-ink-soft)' }}>
-                            {isGroupVal ? (
-                              <>
-                                <span>
-                                  Batch Net Val:{' '}
-                                  <strong className="font-bold" style={{ color: 'var(--color-brass)' }}>
-                                    {fmtKg(group.totalNetVal)}
-                                  </strong>
-                                </span>
-                                <span>
-                                  Batch Amount:{' '}
-                                  <strong className="font-bold" style={{ color: 'var(--color-brass)' }}>
-                                    {fmtMoney(group.totalAmount)}
-                                  </strong>
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <span>
-                                  Batch Gross:{' '}
-                                  <strong className="font-bold" style={{ color: 'var(--color-ink)' }}>
-                                    {fmtKg(group.totalGross)}
-                                  </strong>
-                                </span>
-                                <span>
-                                  Total Rola:{' '}
-                                  <strong className="font-bold" style={{ color: 'var(--color-ink)' }}>
-                                    {group.totalRola} pcs
-                                  </strong>
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-
-                    {/* Individual Bag Rows belonging to this group */}
-                    {group.dispatches.map((d, bagIdx) => {
-                      const isVal = (d.dispatch_type || 'Val') === 'Val'
-
-                      return (
-                        <tr
-                          key={d.id}
-                          style={{
-                            background: groupBg,
-                            borderTop: bagIdx > 0 ? '1px solid var(--color-border-soft)' : 'none',
-                          }}
+                  <tr
+                    key={d.id}
+                    className="hover:bg-[#FAF8F3] transition-colors"
+                    style={{ borderTop: '1px solid var(--color-border-soft)' }}
+                  >
+                    <td className="px-4 py-3.5 whitespace-nowrap text-sm text-[var(--color-ink)]">
+                      {fmtDate(d.date)}
+                    </td>
+                    <td className="px-4 py-3.5 font-semibold text-sm text-[var(--color-ink)]">
+                      {d.party?.name ?? '—'}
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap text-sm">
+                      <span
+                        className="px-2 py-0.5 rounded text-xs font-semibold"
+                        style={{
+                          background: isVal ? 'var(--color-paper)' : '#fef3c7',
+                          color: isVal ? 'var(--color-ink)' : '#92400e',
+                        }}
+                      >
+                        {isVal ? 'Val' : 'Rola'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap tabular-nums text-sm text-[var(--color-ink)]">
+                      {fmtKg(d.bore_gross_weight)}
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap tabular-nums text-sm text-[var(--color-ink)]">
+                      {isVal
+                        ? d.bungari_count > 0 ? `${d.bungari_count} bungari` : '—'
+                        : d.rola_count ? `${d.rola_count} rola` : '—'}
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap tabular-nums text-sm text-[var(--color-ink-soft)]">
+                      {isVal && tareKg > 0 ? fmtKg(tareKg) : '—'}
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap tabular-nums text-sm font-semibold text-[var(--color-brass)]">
+                      {isVal && d.net_val_weight !== null ? fmtKg(d.net_val_weight) : fmtKg(d.bore_gross_weight)}
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap tabular-nums text-sm text-[var(--color-ink)]">
+                      {isVal && d.rate_per_kg ? `₹${d.rate_per_kg}` : '—'}
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap tabular-nums text-sm font-bold text-[var(--color-brass)]">
+                      {isVal && d.amount ? fmtMoney(d.amount) : '—'}
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap text-sm text-[var(--color-ink)]">
+                      {d.challan_no || '—'}
+                    </td>
+                    <td className="px-4 py-3.5 text-right whitespace-nowrap text-sm">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(d)}
+                          className="p-1.5 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] cursor-pointer transition-colors"
+                          title="Edit dispatch"
+                          aria-label="Edit dispatch"
                         >
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            <span
-                              className="px-2 py-0.5 rounded-full text-xs font-semibold"
-                              style={{
-                                background: 'var(--color-border-soft)',
-                                color: 'var(--color-ink)',
-                              }}
-                            >
-                              Bag {bagIdx + 1}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap">{fmtDate(d.date)}</td>
-                          <td className="px-3 py-2 font-medium whitespace-nowrap">
-                            {d.party?.name ?? '—'}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            <span
-                              className="px-2 py-0.5 rounded text-[11px] font-semibold"
-                              style={{
-                                background: isVal ? 'var(--color-paper)' : '#fef3c7',
-                                color: isVal ? 'var(--color-ink)' : '#92400e',
-                              }}
-                            >
-                              {d.dispatch_type || 'Val'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 tabular-nums">{fmtKg(d.bore_gross_weight)}</td>
-                          <td className="px-3 py-2 tabular-nums">
-                            {isVal ? d.bungari_count || 0 : '—'}
-                          </td>
-                          <td
-                            className="px-3 py-2 tabular-nums font-semibold"
-                            style={{ color: isVal ? 'var(--color-brass)' : 'var(--color-ink-soft)' }}
+                          <Pencil size={15} />
+                        </button>
+                        {deleting === d.id ? (
+                          <ConfirmDelete
+                            onConfirm={() => handleDelete(d.id)}
+                            onCancel={() => setDeleting(null)}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setDeleting(d.id)}
+                            className="p-1.5 text-[var(--color-due)] hover:opacity-75 cursor-pointer transition-opacity"
+                            title="Delete dispatch"
+                            aria-label="Delete dispatch"
                           >
-                            {isVal && d.net_val_weight !== null ? fmtKg(d.net_val_weight) : '—'}
-                          </td>
-                          <td className="px-3 py-2 tabular-nums">
-                            {isVal && d.rate_per_kg ? `₹${d.rate_per_kg}` : '—'}
-                          </td>
-                          <td
-                            className="px-3 py-2 tabular-nums font-semibold"
-                            style={{ color: isVal ? 'var(--color-brass)' : 'var(--color-ink-soft)' }}
-                          >
-                            {isVal && d.amount ? fmtMoney(d.amount) : '—'}
-                          </td>
-                          <td className="px-3 py-2 font-medium">{d.challan_no || '—'}</td>
-                          <td className="px-3 py-2 text-right whitespace-nowrap">
-                            <button
-                              type="button"
-                              onClick={() => editDispatch(d)}
-                              className="p-1 cursor-pointer hover:opacity-75 transition-opacity"
-                              style={{ color: 'var(--color-ink-soft)' }}
-                              title="Edit dispatch bag entry"
-                              aria-label="Edit dispatch bag entry"
-                            >
-                              <Pencil size={14} />
-                            </button>
-                            {deleting === d.id ? (
-                              <ConfirmDelete
-                                onConfirm={() => handleDelete(d.id)}
-                                onCancel={() => setDeleting(null)}
-                              />
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setDeleting(d.id)}
-                                className="p-1 cursor-pointer hover:opacity-75 transition-opacity"
-                                style={{ color: 'var(--color-due)' }}
-                                title="Delete dispatch bag entry"
-                                aria-label="Delete dispatch bag entry"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </Fragment>
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
                 )
               })}
             </tbody>

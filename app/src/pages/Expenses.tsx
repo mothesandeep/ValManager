@@ -11,6 +11,7 @@ import type { Expense } from '../types'
 import { EXPENSE_CATEGORIES, fmtDate, fmtMoney, todayStr } from '../types'
 import {
   SectionHeader,
+  KpiCard,
   Button,
   Field,
   TextInput,
@@ -18,6 +19,7 @@ import {
   Table,
   ConfirmDelete,
 } from '../components/ui/UIComponents'
+import { useMonth } from '../context/MonthContext'
 
 interface ExpenseFormState {
   id: string | null
@@ -28,6 +30,7 @@ interface ExpenseFormState {
 }
 
 export default function Expenses() {
+  const { filterByMonth, formattedMonth } = useMonth()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState<ExpenseFormState | null>(null)
@@ -52,6 +55,12 @@ export default function Expenses() {
   useEffect(() => {
     void loadData()
   }, [loadData])
+
+  const filteredExpenses = filterByMonth(expenses)
+  const monthExpenseTotal = filteredExpenses.reduce(
+    (s, x) => s + (Number(x.amount) || 0),
+    0
+  )
 
   const blankForm = (): ExpenseFormState => ({
     id: null,
@@ -129,7 +138,7 @@ export default function Expenses() {
   }
 
   return (
-    <div>
+    <div className="space-y-5">
       <SectionHeader
         title="Expenses"
         subtitle="Rent, transport, machine maintenance, consumables"
@@ -141,6 +150,23 @@ export default function Expenses() {
           )
         }
       />
+
+      {/* ── Month Summary KPIs ────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <KpiCard
+          label="Total Expenses"
+          value={fmtMoney(monthExpenseTotal)}
+          sub={formattedMonth}
+          tone="due"
+          loading={loading}
+        />
+        <KpiCard
+          label="Expense Count"
+          value={filteredExpenses.length}
+          sub="entries recorded"
+          loading={loading}
+        />
+      </div>
 
       {errorMsg && (
         <div
@@ -235,8 +261,8 @@ export default function Expenses() {
       ) : (
         <Table
           columns={['Date', 'Category', 'Amount', 'Note', '']}
-          rows={expenses}
-          emptyText="No expenses recorded yet."
+          rows={filteredExpenses}
+          emptyText={`No expenses found for ${formattedMonth}.`}
         renderRow={(x) => (
           <tr
             key={x.id}

@@ -13,6 +13,7 @@ import type { Party, PaymentWithParty } from '../types'
 import { fmtDate, fmtMoney, todayStr } from '../types'
 import {
   SectionHeader,
+  KpiCard,
   Button,
   Field,
   TextInput,
@@ -21,6 +22,7 @@ import {
   EmptyState,
   ConfirmDelete,
 } from '../components/ui/UIComponents'
+import { useMonth } from '../context/MonthContext'
 
 interface PaymentFormState {
   id: string | null
@@ -31,6 +33,7 @@ interface PaymentFormState {
 }
 
 export default function Payments() {
+  const { filterByMonth, formattedMonth } = useMonth()
   const [parties, setParties] = useState<Party[]>([])
   const [payments, setPayments] = useState<PaymentWithParty[]>([])
   const [partyBalances, setPartyBalances] = useState<
@@ -84,6 +87,12 @@ export default function Payments() {
   useEffect(() => {
     void loadData()
   }, [loadData])
+
+  const filteredPayments = filterByMonth(payments)
+  const monthCollectedTotal = filteredPayments.reduce(
+    (s, p) => s + (Number(p.amount) || 0),
+    0
+  )
 
   const blankForm = (initialPartyId?: string): PaymentFormState => ({
     id: null,
@@ -161,7 +170,7 @@ export default function Payments() {
   }
 
   return (
-    <div>
+    <div className="space-y-5">
       <SectionHeader
         title="Payments"
         subtitle="Log money received against dispatched Val"
@@ -174,6 +183,23 @@ export default function Payments() {
           )
         }
       />
+
+      {/* ── Month Summary KPI ─────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <KpiCard
+          label="Total Collected"
+          value={fmtMoney(monthCollectedTotal)}
+          sub={formattedMonth}
+          tone="positive"
+          loading={loading}
+        />
+        <KpiCard
+          label="Payments Logged"
+          value={filteredPayments.length}
+          sub="entries recorded"
+          loading={loading}
+        />
+      </div>
 
       {errorMsg && (
         <div
@@ -317,8 +343,8 @@ export default function Payments() {
       {/* ── Table View ───────────────────────────────────────────── */}
       <Table
         columns={['Date', 'Party', 'Amount', 'Note', '']}
-        rows={payments}
-        emptyText="No payments logged yet."
+        rows={filteredPayments}
+        emptyText={`No payments logged for ${formattedMonth}.`}
         renderRow={(p) => (
           <tr
             key={p.id}

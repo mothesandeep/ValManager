@@ -6,27 +6,33 @@ import {
   fetchDispatches,
   fetchExpenses,
   fetchPayments,
-  fetchProductionOrders,
   fetchRolaReturns,
+  fetchGapchaSales,
+  fetchReconciliations,
   computePartyStats,
 } from '../lib/queries'
+import { computeOverallGapchaStats } from '../lib/calculations'
+import { useMonth } from '../context/MonthContext'
 import type {
   Party,
   ReceiptWithParty,
   DispatchWithParty,
   Expense,
-  ProductionWithReceipt,
   PartyStats,
+  GapchaSaleWithParty,
+  GapchaReconciliationWithParty,
 } from '../types'
-import { fmtDate, fmtKg, fmtMoney, isThisMonth } from '../types'
+import { fmtDate, fmtKg, fmtMoney } from '../types'
 import { SectionHeader, KpiCard, Table } from '../components/ui/UIComponents'
 
 export default function Dashboard() {
+  const { selectedMonth, filterByMonth, formattedMonth } = useMonth()
   const [parties, setParties] = useState<Party[]>([])
   const [receipts, setReceipts] = useState<ReceiptWithParty[]>([])
   const [dispatches, setDispatches] = useState<DispatchWithParty[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
-  const [production, setProduction] = useState<ProductionWithReceipt[]>([])
+  const [gapchaSales, setGapchaSales] = useState<GapchaSaleWithParty[]>([])
+  const [reconciliations, setReconciliations] = useState<GapchaReconciliationWithParty[]>([])
   const [stats, setStats] = useState<Record<string, PartyStats>>({})
   const [loading, setLoading] = useState(true)
 
@@ -40,30 +46,35 @@ export default function Dashboard() {
           dispatchesData,
           expensesData,
           paymentsData,
-          prodData,
           rolaData,
+          gapchaData,
+          reconsData,
         ] = await Promise.all([
           fetchParties(),
           fetchReceipts(),
           fetchDispatches(),
           fetchExpenses(),
           fetchPayments(),
-          fetchProductionOrders(),
           fetchRolaReturns(),
+          fetchGapchaSales(),
+          fetchReconciliations(),
         ])
 
         setParties(partiesData)
         setReceipts(receiptsData)
         setDispatches(dispatchesData)
         setExpenses(expensesData)
-        setProduction(prodData)
+        setGapchaSales(gapchaData)
+        setReconciliations(reconsData)
 
         const computedStats = computePartyStats(
           partiesData,
           receiptsData,
           rolaData,
           dispatchesData,
-          paymentsData
+          paymentsData,
+          gapchaData,
+          reconsData
         )
         setStats(computedStats)
       } catch (err) {
@@ -84,47 +95,86 @@ export default function Dashboard() {
     (sum, x) => sum + (x.rolaPending > 0 ? x.rolaPending : 0),
     0
   )
-  const monthExpenses = expenses
-    .filter((x) => isThisMonth(x.date))
-    .reduce((sum, x) => sum + (Number(x.amount) || 0), 0)
-  const inProgressCount = production.filter((p) => p.status !== 'Done').length
 
-  const recentReceipts = [...receipts]
+  const monthExpenses = filterByMonth(expenses).reduce(
+    (sum, x) => sum + (Number(x.amount) || 0),
+    0
+  )
+
+  const monthDispatches = filterByMonth(dispatches)
+  const monthDispatchNet = monthDispatches.reduce((sum, d) => {
+    const isRola = d.dispatch_type === 'Kali' || d.dispatch_type === 'Rola'
+    return sum + (isRola ? Number(d.bore_gross_weight) || 0 : Number(d.net_val_weight) || 0)
+  }, 0)
+
+  const monthReceipts = filterByMonth(receipts)
+  const monthReceivedNet = monthReceipts.reduce((sum, r) => sum + (Number(r.net_weight) || 0), 0)
+
+  const overallGapcha = computeOverallGapchaStats(
+    receipts,
+    dispatches,
+    gapchaSales,
+    reconciliations,
+    selectedMonth
+  )
+
+  const recentReceipts = [...monthReceipts]
     .sort((a, b) => (a.date < b.date ? 1 : -1))
     .slice(0, 5)
 
-  const recentDispatches = [...dispatches]
+  const recentDispatches = [...monthDispatches]
     .sort((a, b) => (a.date < b.date ? 1 : -1))
     .slice(0, 5)
 
   return (
-    <div>
+    <div className="space-y-5">
       <SectionHeader
         title="Dashboard"
-        subtitle="Jari Kasab Val — job-work overview"
+        subtitle="Jari Kasab Val — job-work overview & real-time metrics"
       />
 
       {/* ── KPI Grid ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard
-          label="Parties"
+          label="Active Parties"
           value={parties.length}
+          sub="customer directory"
           loading={loading}
         />
         <KpiCard
-          label="Production active"
-          value={inProgressCount}
-          sub="pending / in progress"
+          label="Kasab Received"
+          value={fmtKg(monthReceivedNet)}
+          sub={formattedMonth}
           loading={loading}
         />
         <KpiCard
-          label="Rola pending"
+          label="Val Dispatched"
+          value={fmtKg(monthDispatchNet)}
+          sub={formattedMonth}
+          loading={loading}
+        />
+        <KpiCard
+          label="In Workshop (Raw)"
+          value={fmtKg(overallGapcha.unprocessedKasabWeight)}
+          sub="processing stock"
+          tone={overallGapcha.unprocessedKasabWeight > 0 ? 'due' : undefined}
+          loading={loading}
+        />
+        <KpiCard
+          label="Gapcha Available"
+          value={fmtKg(overallGapcha.remainingGapchaWeight)}
+          sub="surplus ready"
+          tone={overallGapcha.remainingGapchaWeight > 0 ? 'positive' : undefined}
+          loading={loading}
+        />
+        <KpiCard
+          label="Rola Pending"
           value={rolaPending}
-          sub="to be returned"
+          sub="empty spools"
           loading={loading}
         />
         <KpiCard
-          label="Balance due"
+          label="Total Balance Due"
           value={fmtMoney(totalDue)}
           tone="due"
           loading={loading}
@@ -132,7 +182,7 @@ export default function Dashboard() {
         <KpiCard
           label="Expenses"
           value={fmtMoney(monthExpenses)}
-          sub="this month"
+          sub={formattedMonth}
           tone="due"
           loading={loading}
         />

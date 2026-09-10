@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   Users,
   PackagePlus,
-  Cog,
   Truck,
   RotateCcw,
   IndianRupee,
@@ -13,19 +12,23 @@ import {
   MoreHorizontal,
   X,
   ChevronRight,
+  Scale,
+  SlidersHorizontal,
 } from 'lucide-react'
+import MonthSelector from './ui/MonthSelector'
 
-// All 9 routes in the application matching kasab-val-manager.jsx
+// All routes in the application
 export const ALL_NAV_ITEMS = [
-  { to: '/',           label: 'Dashboard',  icon: LayoutDashboard, desc: 'Overview & quick metrics' },
-  { to: '/parties',    label: 'Parties',    icon: Users,           desc: 'Customer directory & balances' },
-  { to: '/receiving',  label: 'Receiving',  icon: PackagePlus,     desc: 'Raw yarn entry & tare weight' },
-  { to: '/production', label: 'Production', icon: Cog,             desc: 'Daily production batches' },
-  { to: '/dispatch',   label: 'Dispatch',   icon: Truck,           desc: 'Finished kasab deliveries' },
-  { to: '/rola',       label: 'Rola',       icon: RotateCcw,       desc: 'Empty spool returns' },
-  { to: '/payments',   label: 'Payments',   icon: IndianRupee,     desc: 'Party payment receipts' },
-  { to: '/expenses',   label: 'Expenses',   icon: Receipt,         desc: 'Daily business expenses' },
-  { to: '/reports',    label: 'Reports',    icon: BarChart3,       desc: 'Financial & party ledgers' },
+  { to: '/',           label: 'Dashboard',        icon: LayoutDashboard, desc: 'Overview & quick metrics' },
+  { to: '/parties',    label: 'Parties',          icon: Users,           desc: 'Customer directory & balances' },
+  { to: '/receiving',  label: 'Receiving',        icon: PackagePlus,     desc: 'Raw yarn entry & tare weight' },
+  { to: '/dispatch',   label: 'Dispatch',         icon: Truck,           desc: 'Finished kasab deliveries' },
+  { to: '/gapcha',     label: 'Gapcha / Surplus', icon: Scale,           desc: 'Extra sellable weight stock' },
+  { to: '/rola',       label: 'Rola',             icon: RotateCcw,       desc: 'Empty spool returns' },
+  { to: '/payments',   label: 'Payments',         icon: IndianRupee,     desc: 'Party payment receipts' },
+  { to: '/expenses',   label: 'Expenses',         icon: Receipt,         desc: 'Daily business expenses' },
+  { to: '/reports',    label: 'Reports',          icon: BarChart3,       desc: 'Financial & party ledgers' },
+  { to: '/settings',   label: 'Settings',         icon: SlidersHorizontal, desc: 'Weight & party defaults' },
 ]
 
 // 4 Primary Mobile Tabs + More
@@ -36,13 +39,14 @@ const PRIMARY_MOBILE_ITEMS = [
   { to: '/dispatch',  label: 'Dispatch',  icon: Truck           },
 ]
 
-// 5 Secondary Modules shown inside "More" sheet
+// Secondary Modules shown inside "More" sheet
 const MORE_MOBILE_ITEMS = [
-  { to: '/production', label: 'Production', icon: Cog,         desc: 'Daily batch entries' },
-  { to: '/rola',       label: 'Rola',       icon: RotateCcw,   desc: 'Empty spool returns' },
-  { to: '/payments',   label: 'Payments',   icon: IndianRupee, desc: 'Party payments & receipts' },
-  { to: '/expenses',   label: 'Expenses',   icon: Receipt,     desc: 'Operating & machine costs' },
-  { to: '/reports',    label: 'Reports',    icon: BarChart3,   desc: 'Summary reports & ledger' },
+  { to: '/gapcha',     label: 'Gapcha / Surplus', icon: Scale,             desc: 'Extra sellable weight stock' },
+  { to: '/rola',       label: 'Rola',             icon: RotateCcw,         desc: 'Empty spool returns' },
+  { to: '/payments',   label: 'Payments',         icon: IndianRupee,       desc: 'Party payments & receipts' },
+  { to: '/expenses',   label: 'Expenses',         icon: Receipt,           desc: 'Operating & machine costs' },
+  { to: '/reports',    label: 'Reports',          icon: BarChart3,         desc: 'Summary reports & ledger' },
+  { to: '/settings',   label: 'Settings',         icon: SlidersHorizontal, desc: 'Weight & party defaults' },
 ]
 
 export default function Layout() {
@@ -90,7 +94,7 @@ export default function Layout() {
     >
       {/* ── Top Header ────────────────────────────────────────────── */}
       <header
-        className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
+        className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 py-2.5 shrink-0 gap-3"
         style={{
           background: 'var(--color-ink)',
           borderBottom: '1px solid var(--color-brass-dark)',
@@ -102,13 +106,15 @@ export default function Layout() {
             style={{ background: 'var(--color-brass)' }}
           />
           <h1
-            className="text-base sm:text-lg font-semibold text-white tracking-wide"
+            className="text-base sm:text-lg font-semibold text-white tracking-wide whitespace-nowrap"
             style={{ fontFamily: 'var(--font-display)' }}
           >
             Kasab Val Manager
           </h1>
         </div>
-        <span className="text-xs hidden sm:block" style={{ color: '#C9C2B4' }}>
+
+        {/* Desktop-only small muted date */}
+        <span className="text-xs hidden sm:block font-medium" style={{ color: '#C9C2B4' }}>
           {dateDisplay}
         </span>
       </header>
@@ -146,8 +152,9 @@ export default function Layout() {
           })}
         </nav>
 
-        {/* ── Main content view ─────────────────────────────────────── */}
-        <main className="flex-1 p-4 sm:p-6 pb-24 sm:pb-8 max-w-6xl w-full">
+        {/* ── Main content view with separate Month Toolbar ───────── */}
+        <main className="flex-1 p-4 sm:p-6 pb-24 sm:pb-8 max-w-6xl w-full flex flex-col gap-4 sm:gap-5">
+          <MonthSelector />
           <Outlet />
         </main>
       </div>

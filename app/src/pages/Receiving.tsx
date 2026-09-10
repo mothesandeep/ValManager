@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, Fragment } from 'react'
-import { Plus, Pencil, Trash2, Check, X, Layers, AlertCircle } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Plus, Pencil, Trash2, Check, AlertCircle } from 'lucide-react'
 import {
   fetchParties,
   fetchReceipts,
@@ -9,9 +9,10 @@ import {
   type ReceiptPayload,
 } from '../lib/queries'
 import type { Party, ReceiptWithParty } from '../types'
-import { COLOR_TYPES, fmtDate, fmtKg, kgToGrams, todayStr } from '../types'
+import { COLOR_TYPES, fmtDate, fmtKg, todayStr } from '../types'
 import {
   SectionHeader,
+  KpiCard,
   Button,
   Field,
   TextInput,
@@ -19,189 +20,58 @@ import {
   EmptyState,
   ConfirmDelete,
 } from '../components/ui/UIComponents'
+import { useMonth } from '../context/MonthContext'
+import { resolvePartyRolaWeight, getGlobalSettings } from '../lib/settings'
 
 const STORAGE_KEY_PER_ROLA = 'kasab_last_per_rola_weight'
 
-interface BagRow {
+interface BagItem {
   id: string
-  grossGrams: string
-  rolaCount: string
-  perRolaGrams: string
-  touched?: {
-    gross?: boolean
-    rola?: boolean
-    perRola?: boolean
-  }
+  gross: string       // in kg (e.g. "30.500")
+  rolaCount: string   // integer
+  perRolaGrams: string // e.g. "200"
 }
 
-interface BatchHeaderState {
+interface FormHeader {
   partyId: string
   date: string
   color: string
   challanNo: string
 }
 
-interface ChallanGroup {
-  id: string
-  challanNo: string | null
-  partyName: string
-  date: string
-  color: string | null
-  receipts: ReceiptWithParty[]
-  totalNet: number
-  totalGross: number
-  totalRola: number
-}
-
-interface BagValidationResult {
-  grossError: string | null
-  rolaError: string | null
-  perRolaError: string | null
-  tareError: string | null
-  isValid: boolean
-  grossG: number
-  rolaCnt: number
-  perRolaG: number
-  tareG: number
-  netG: number
-}
-
-function validateBag(bag: BagRow): BagValidationResult {
-  let grossError: string | null = null
-  let rolaError: string | null = null
-  let perRolaError: string | null = null
-  let tareError: string | null = null
-
-  // 1. Gross Weight validation
-  if (!bag.grossGrams.trim()) {
-    grossError = 'Gross weight is required'
-  } else {
-    const g = parseInt(bag.grossGrams, 10)
-    if (isNaN(g) || g <= 0) {
-      grossError = 'Gross weight must be greater than 0'
-    }
-  }
-
-  // 2. Rola Count validation
-  if (!bag.rolaCount.trim()) {
-    rolaError = 'Rola count is required'
-  } else {
-    const r = parseInt(bag.rolaCount, 10)
-    if (isNaN(r) || r < 0) {
-      rolaError = 'Rola count cannot be negative'
-    }
-  }
-
-  // 3. Per Rola Weight validation
-  const rCount = parseInt(bag.rolaCount.trim() || '0', 10)
-  if (bag.perRolaGrams.trim()) {
-    const pr = parseInt(bag.perRolaGrams, 10)
-    if (isNaN(pr) || pr <= 0) {
-      perRolaError = 'Per rola weight must be greater than 0'
-    }
-  } else if (!isNaN(rCount) && rCount > 0) {
-    perRolaError = 'Per rola weight is required'
-  }
-
-  const grossG = parseInt(bag.grossGrams, 10) || 0
-  const rolaCnt = isNaN(rCount) ? 0 : rCount
-  const perRolaG = parseInt(bag.perRolaGrams.trim() || '0', 10) || 0
-  const tareG = rolaCnt * perRolaG
-  const netG = Math.max(0, grossG - tareG)
-
-  // 4. Tare vs Gross validation
-  if (!grossError && !rolaError && !perRolaError && grossG > 0) {
-    if (tareG >= grossG) {
-      tareError = `Tare (${fmtKg(tareG / 1000)}) cannot exceed gross weight (${fmtKg(grossG / 1000)})`
-    }
-  }
-
-  const isValid = !grossError && !rolaError && !perRolaError && !tareError
-
-  return {
-    grossError,
-    rolaError,
-    perRolaError,
-    tareError,
-    isValid,
-    grossG,
-    rolaCnt,
-    perRolaG,
-    tareG,
-    netG,
-  }
-}
-
-function groupReceiptsByChallan(receipts: ReceiptWithParty[]): ChallanGroup[] {
-  const groups: ChallanGroup[] = []
-  const map = new Map<string, ChallanGroup>()
-
-  for (const r of receipts) {
-    const challanTrimmed = r.challan_no?.trim() || null
-    const groupKey = challanTrimmed
-      ? `challan_${challanTrimmed}_${r.party_id || 'unknown'}_${r.date}`
-      : `no_challan_${r.id}`
-
-    let g = map.get(groupKey)
-    if (!g) {
-      g = {
-        id: groupKey,
-        challanNo: challanTrimmed,
-        partyName: r.party?.name || '—',
-        date: r.date,
-        color: r.color || null,
-        receipts: [],
-        totalNet: 0,
-        totalGross: 0,
-        totalRola: 0,
-      }
-      map.set(groupKey, g)
-      groups.push(g)
-    }
-
-    g.receipts.push(r)
-    g.totalNet += Number(r.net_weight) || 0
-    g.totalGross += Number(r.gross_weight) || 0
-    g.totalRola += Number(r.rola_count) || 0
-  }
-
-  return groups
-}
-
 export default function Receiving() {
+  const { filterByMonth, formattedMonth } = useMonth()
   const [receipts, setReceipts] = useState<ReceiptWithParty[]>([])
   const [parties, setParties] = useState<Party[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Form open state
+  // Form State
   const [isOpen, setIsOpen] = useState(false)
-  const [editingReceiptId, setEditingReceiptId] = useState<string | null>(null)
-  const [submitAttempted, setSubmitAttempted] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
-  // Header & Bags state
-  const [header, setHeader] = useState<BatchHeaderState>({
+  const [header, setHeader] = useState<FormHeader>({
     partyId: '',
     date: todayStr(),
     color: '',
     challanNo: '',
   })
-  const [bags, setBags] = useState<BagRow[]>([])
 
-  // Remembered per-rola weight
+  // Remembered per-rola weight (grams)
   const [rememberedPerRola, setRememberedPerRola] = useState<string>(() => {
-    try {
-      return localStorage.getItem(STORAGE_KEY_PER_ROLA) || '200'
-    } catch {
-      return '200'
-    }
+    return String(getGlobalSettings().defaultRolaGrams)
   })
 
-  // Toggle for custom per-rola weight input per bag
-  const [showPerRola, setShowPerRola] = useState<Record<string, boolean>>({})
+  const createBlankBag = (customPerRola?: string): BagItem => ({
+    id: Math.random().toString(36).substring(2, 9),
+    gross: '',
+    rolaCount: '',
+    perRolaGrams: customPerRola || rememberedPerRola || '200',
+  })
 
-  const [deleting, setDeleting] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [bags, setBags] = useState<BagItem[]>([createBlankBag()])
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -225,36 +95,42 @@ export default function Receiving() {
     void loadData()
   }, [loadData])
 
-  const createBlankBag = (defaultPerRola: string): BagRow => ({
-    id: Math.random().toString(36).substring(2, 9),
-    grossGrams: '',
-    rolaCount: '',
-    perRolaGrams: defaultPerRola,
-    touched: {
-      gross: false,
-      rola: false,
-      perRola: false,
-    },
-  })
+  const filteredReceipts = filterByMonth(receipts)
+  const monthGross = filteredReceipts.reduce((s, r) => s + (Number(r.gross_weight) || 0), 0)
+  const monthNet = filteredReceipts.reduce((s, r) => s + (Number(r.net_weight) || 0), 0)
+  const monthRola = filteredReceipts.reduce((s, r) => s + (Number(r.rola_count) || 0), 0)
 
-  const startNewBatch = (initialPartyId?: string) => {
-    setEditingReceiptId(null)
-    setSubmitAttempted(false)
+  const handlePartyChange = (newPartyId: string) => {
+    const selectedParty = parties.find((p) => p.id === newPartyId)
+    const partyRola = String(resolvePartyRolaWeight(selectedParty))
+    setHeader((prev) => ({ ...prev, partyId: newPartyId }))
+    setRememberedPerRola(partyRola)
+    setBags((prev) =>
+      prev.map((b) => ({
+        ...b,
+        perRolaGrams: partyRola,
+      }))
+    )
+  }
+
+  const startAdd = () => {
+    setEditingId(null)
+    const firstParty = parties[0]
+    const initialRola = String(resolvePartyRolaWeight(firstParty))
+    setRememberedPerRola(initialRola)
     setHeader({
-      partyId: initialPartyId || parties[0]?.id || '',
+      partyId: firstParty?.id || '',
       date: todayStr(),
       color: '',
       challanNo: '',
     })
-    setBags([createBlankBag(rememberedPerRola)])
+    setBags([createBlankBag(initialRola)])
     setIsOpen(true)
     setErrorMsg(null)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const editReceipt = (r: ReceiptWithParty) => {
-    setEditingReceiptId(r.id)
-    setSubmitAttempted(false)
+  const startEdit = (r: ReceiptWithParty) => {
+    setEditingId(r.id)
     setHeader({
       partyId: r.party_id || parties[0]?.id || '',
       date: r.date,
@@ -262,7 +138,6 @@ export default function Receiving() {
       challanNo: r.challan_no || '',
     })
 
-    // Calculate original per-rola weight for this receipt
     const rolaCnt = r.rola_count ?? 0
     const originalPerRola =
       rolaCnt > 0
@@ -272,77 +147,76 @@ export default function Receiving() {
     setBags([
       {
         id: r.id,
-        grossGrams: kgToGrams(r.gross_weight),
+        gross: String(r.gross_weight),
         rolaCount: String(rolaCnt),
         perRolaGrams: originalPerRola,
-        touched: {
-          gross: true,
-          rola: true,
-          perRola: true,
-        },
       },
     ])
     setIsOpen(true)
     setErrorMsg(null)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const closeForm = () => {
     setIsOpen(false)
-    setEditingReceiptId(null)
-    setSubmitAttempted(false)
+    setEditingId(null)
     setErrorMsg(null)
   }
 
-  const addBagRow = () => {
+  const addBag = () => {
     setBags((prev) => [...prev, createBlankBag(rememberedPerRola)])
   }
 
-  const removeBagRow = (id: string) => {
+  const removeBag = (id: string) => {
     if (bags.length <= 1) return
     setBags((prev) => prev.filter((b) => b.id !== id))
   }
 
-  const markTouched = (id: string, field: 'gross' | 'rola' | 'perRola') => {
-    setBags((prev) =>
-      prev.map((b) =>
-        b.id === id ? { ...b, touched: { ...b.touched, [field]: true } } : b
-      )
-    )
+  const updateDefaultPerRola = (val: string) => {
+    const clean = val.replace(/[^0-9]/g, '')
+    setRememberedPerRola(clean)
+    try {
+      if (clean) localStorage.setItem(STORAGE_KEY_PER_ROLA, clean)
+    } catch {}
+    setBags((prev) => prev.map((b) => ({ ...b, perRolaGrams: clean || '200' })))
   }
 
-  const updateBagField = (
-    id: string,
-    field: keyof BagRow,
-    value: string
-  ) => {
+  const updateBag = (id: string, field: keyof BagItem, val: string) => {
     if (field === 'perRolaGrams') {
-      const cleanVal = value.replace(/[^0-9]/g, '')
-      setRememberedPerRola(cleanVal)
+      const clean = val.replace(/[^0-9]/g, '')
+      setRememberedPerRola(clean)
       try {
-        if (cleanVal) localStorage.setItem(STORAGE_KEY_PER_ROLA, cleanVal)
+        if (clean) localStorage.setItem(STORAGE_KEY_PER_ROLA, clean)
       } catch {}
     }
-
     setBags((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, [field]: value } : b))
+      prev.map((b) => (b.id === id ? { ...b, [field]: val } : b))
     )
   }
 
-  // Pre-calculate validations for all active bags
-  const bagValidations = bags.map((b) => ({
+  // Calculate tare & net for a bag
+  const calcBagValues = (b: BagItem) => {
+    let grossKg = parseFloat(b.gross) || 0
+    // Auto handle if user typed grams as whole number (e.g. 30500 => 30.5 kg)
+    if (grossKg > 500) {
+      grossKg = grossKg / 1000
+    }
+    const rola = parseInt(b.rolaCount, 10) || 0
+    const perRola = parseInt(b.perRolaGrams, 10) || 200
+    const tareKg = (rola * perRola) / 1000
+    const netKg = Math.max(0, grossKg - tareKg)
+    return { grossKg, rola, perRola, tareKg, netKg }
+  }
+
+  const bagCalculations = bags.map((b) => ({
     bag: b,
-    validation: validateBag(b),
+    ...calcBagValues(b),
   }))
 
-  const allBagsValid =
-    bags.length > 0 && bagValidations.every((bv) => bv.validation.isValid)
-  const isHeaderValid = Boolean(header.partyId && header.date)
-  const canSave = allBagsValid && isHeaderValid && !saving
+  const totalNet = bagCalculations.reduce((sum, b) => sum + b.netKg, 0)
+  const totalRola = bagCalculations.reduce((sum, b) => sum + b.rola, 0)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSubmitAttempted(true)
 
     if (!header.partyId) {
       setErrorMsg('Please select a party')
@@ -350,34 +224,20 @@ export default function Receiving() {
     }
 
     if (!header.date) {
-      setErrorMsg('Please select a receiving date')
+      setErrorMsg('Please select a date')
       return
     }
 
-    if (bags.length === 0) {
-      setErrorMsg('Please add at least one bag entry')
-      return
-    }
-
-    // Check if any bag is invalid
-    for (let i = 0; i < bagValidations.length; i++) {
-      const { validation } = bagValidations[i]
-      const bagNum = i + 1
-
-      if (validation.grossError) {
-        setErrorMsg(`Bag #${bagNum}: ${validation.grossError}`)
+    // Validate all bags
+    for (let i = 0; i < bagCalculations.length; i++) {
+      const { grossKg, tareKg } = bagCalculations[i]
+      const bNum = i + 1
+      if (grossKg <= 0) {
+        setErrorMsg(`Bag #${bNum}: Gross weight must be greater than 0`)
         return
       }
-      if (validation.rolaError) {
-        setErrorMsg(`Bag #${bagNum}: ${validation.rolaError}`)
-        return
-      }
-      if (validation.perRolaError) {
-        setErrorMsg(`Bag #${bagNum}: ${validation.perRolaError}`)
-        return
-      }
-      if (validation.tareError) {
-        setErrorMsg(`Bag #${bagNum}: ${validation.tareError}`)
+      if (tareKg >= grossKg && grossKg > 0) {
+        setErrorMsg(`Bag #${bNum}: Tare (${fmtKg(tareKg)}) cannot exceed gross weight (${fmtKg(grossKg)})`)
         return
       }
     }
@@ -386,32 +246,30 @@ export default function Receiving() {
     setErrorMsg(null)
 
     try {
-      if (editingReceiptId) {
+      if (editingId) {
         // Single bag update
-        const val = bagValidations[0].validation
+        const val = bagCalculations[0]
         const payload: ReceiptPayload = {
           party_id: header.partyId,
           date: header.date,
           color: header.color.trim() || null,
           challan_no: header.challanNo.trim() || null,
-          gross_weight: val.grossG / 1000,
-          tare_weight: val.tareG / 1000,
-          rola_count: val.rolaCnt,
+          gross_weight: val.grossKg,
+          tare_weight: val.tareKg,
+          rola_count: val.rola,
         }
-
-        await updateReceipt(editingReceiptId, payload)
+        await updateReceipt(editingId, payload)
       } else {
         // Multi-bag batch insert
-        const payloads: ReceiptPayload[] = bagValidations.map(({ validation }) => ({
+        const payloads: ReceiptPayload[] = bagCalculations.map((val) => ({
           party_id: header.partyId,
           date: header.date,
           color: header.color.trim() || null,
           challan_no: header.challanNo.trim() || null,
-          gross_weight: validation.grossG / 1000,
-          tare_weight: validation.tareG / 1000,
-          rola_count: validation.rolaCnt,
+          gross_weight: val.grossKg,
+          tare_weight: val.tareKg,
+          rola_count: val.rola,
         }))
-
         await insertReceipts(payloads)
       }
 
@@ -420,7 +278,7 @@ export default function Receiving() {
     } catch (err: unknown) {
       console.error('Save receipt error:', err)
       const msg = err instanceof Error ? err.message : String(err)
-      setErrorMsg(`Could not save receiving entries — ${msg}`)
+      setErrorMsg(`Could not save receipt — ${msg}`)
     } finally {
       setSaving(false)
     }
@@ -438,52 +296,69 @@ export default function Receiving() {
     }
   }
 
-  // Compute batch summary totals
-  const summary = bagValidations.reduce(
-    (acc, { validation }) => {
-      acc.totalGrossG += validation.grossG
-      acc.totalRola += validation.rolaCnt
-      acc.totalTareG += validation.tareG
-      acc.totalNetG += validation.netG
-      return acc
-    },
-    { totalGrossG: 0, totalRola: 0, totalTareG: 0, totalNetG: 0 }
-  )
-
-  const isEditing = Boolean(editingReceiptId)
-  const challanGroups = groupReceiptsByChallan(receipts)
+  const isSingleBag = bags.length === 1
+  const firstBagCalc = bagCalculations[0] || { grossKg: 0, rola: 0, tareKg: 0, netKg: 0 }
 
   return (
     <div>
       <SectionHeader
         title="Raw Material Receiving"
-        subtitle="Kasab received from parties — multiple bag entry, weight and challan tracking"
+        subtitle="Kasab received from parties — weight and challan tracking"
         action={
           !isOpen &&
           parties.length > 0 && (
-            <Button onClick={() => startNewBatch()}>
-              <Plus size={16} /> New Receiving Entry
+            <Button onClick={startAdd}>
+              <Plus size={16} /> New Receipt
             </Button>
           )
         }
       />
 
+      {/* ── Month Summary KPIs ────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+        <KpiCard
+          label="Received Bags"
+          value={filteredReceipts.length}
+          sub={formattedMonth}
+          loading={loading}
+        />
+        <KpiCard
+          label="Net Kasab"
+          value={fmtKg(monthNet)}
+          sub={formattedMonth}
+          tone="positive"
+          loading={loading}
+        />
+        <KpiCard
+          label="Gross Weight"
+          value={fmtKg(monthGross)}
+          sub="raw yarn + rola"
+          loading={loading}
+        />
+        <KpiCard
+          label="Rola Received"
+          value={monthRola}
+          sub="empty spools"
+          loading={loading}
+        />
+      </div>
+
       {errorMsg && (
         <div
-          className="rounded-lg p-3.5 mb-5 text-sm font-medium flex items-center justify-between shadow-sm"
+          className="rounded-lg p-3 mb-4 text-xs font-medium flex items-center justify-between shadow-xs"
           style={{
             background: 'var(--color-due-bg)',
             color: 'var(--color-due)',
-            border: '1px solid color-mix(in srgb, var(--color-due) 30%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--color-due) 25%, transparent)',
           }}
         >
-          <div className="flex items-center gap-2">
-            <AlertCircle size={18} className="shrink-0" />
+          <div className="flex items-center gap-1.5">
+            <AlertCircle size={15} className="shrink-0" />
             <span>{errorMsg}</span>
           </div>
           <button
             onClick={() => setErrorMsg(null)}
-            className="underline cursor-pointer text-xs ml-3 font-semibold"
+            className="underline cursor-pointer font-semibold"
           >
             Dismiss
           </button>
@@ -494,656 +369,507 @@ export default function Receiving() {
         <EmptyState text="Add a party first before recording receiving entries." />
       )}
 
-      {/* ── Multi-Bag Form Modal / Panel ─────────────────────────── */}
+      {/* ── Minimal Add / Edit Form (Image 3 layout) ──────────────── */}
       {isOpen && (
         <form
           onSubmit={submit}
-          noValidate
-          className="mb-8 p-4 sm:p-6 rounded-xl shadow-sm"
-          style={{
-            background: 'var(--color-card)',
-            border: '1px solid var(--color-border)',
-          }}
+          className="mb-6 p-4 rounded-lg bg-white border border-[var(--color-border)] shadow-xs"
         >
-          {/* Header Row: Title & Mode */}
-          <div className="flex items-center justify-between pb-4 mb-4 border-b border-[var(--color-border-soft)]">
-            <div className="flex items-center gap-2">
-              <span
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-white"
-                style={{ background: 'var(--color-brass)' }}
-              >
-                <Layers size={16} />
-              </span>
-              <div>
-                <h3 className="font-semibold text-base" style={{ color: 'var(--color-ink)' }}>
-                  {isEditing ? 'Edit Receiving Entry' : 'New Multi-Bag Receiving Entry'}
-                </h3>
-                <p className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                  {isEditing
-                    ? 'Update weight and details for this individual bag record'
-                    : 'Enter common details once, then add one or multiple bags'}
-                </p>
+          {isSingleBag ? (
+            /* ── Single Bag Mode: EXACT Image 3 Grid with Rola Wt ── */
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Party *">
+                <Select
+                  required
+                  value={header.partyId}
+                  onChange={(e) => handlePartyChange(e.target.value)}
+                >
+                  {parties.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
+              <Field label="Date">
+                <TextInput
+                  type="date"
+                  required
+                  value={header.date}
+                  onChange={(e) => setHeader({ ...header, date: e.target.value })}
+                />
+              </Field>
+
+              <Field label="Kasab Color">
+                <Select
+                  value={header.color}
+                  onChange={(e) => setHeader({ ...header, color: e.target.value })}
+                >
+                  <option value="">— None —</option>
+                  {COLOR_TYPES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
+              <Field label="Gross Weight (kg) *">
+                <TextInput
+                  required
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  placeholder="e.g. 12.500"
+                  value={bags[0].gross}
+                  onChange={(e) => updateBag(bags[0].id, 'gross', e.target.value)}
+                />
+              </Field>
+
+              <Field label="Rola Count">
+                <TextInput
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 12"
+                  value={bags[0].rolaCount}
+                  onChange={(e) => updateBag(bags[0].id, 'rolaCount', e.target.value)}
+                />
+              </Field>
+
+              <Field label="Per Rola Weight (g)">
+                <TextInput
+                  type="number"
+                  min="1"
+                  placeholder="200"
+                  value={bags[0].perRolaGrams}
+                  onChange={(e) => updateBag(bags[0].id, 'perRolaGrams', e.target.value)}
+                />
+              </Field>
+
+              <Field label="Challan Number">
+                <TextInput
+                  placeholder="e.g. CH-1042"
+                  value={header.challanNo}
+                  onChange={(e) => setHeader({ ...header, challanNo: e.target.value })}
+                />
+              </Field>
+
+              <Field label="Tare / Rola Weight (kg)">
+                <div
+                  className="px-3 py-2 rounded-md text-sm tabular-nums flex items-center justify-between min-h-[38px]"
+                  style={{ background: 'var(--color-border-soft)', color: 'var(--color-ink)' }}
+                >
+                  <span>{fmtKg(firstBagCalc.tareKg)}</span>
+                  {firstBagCalc.rola > 0 && (
+                    <span className="text-xs text-[var(--color-ink-soft)]">
+                      ({firstBagCalc.rola} × {bags[0].perRolaGrams || 200}g)
+                    </span>
+                  )}
+                </div>
+              </Field>
+
+              <Field label="Net Weight">
+                <div
+                  className="px-3 py-2 rounded-md text-sm font-semibold tabular-nums flex items-center min-h-[38px]"
+                  style={{ background: 'var(--color-border-soft)', color: 'var(--color-ink)' }}
+                >
+                  {fmtKg(firstBagCalc.netKg)}
+                </div>
+              </Field>
+
+              {/* Action Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 mt-1 border-t border-[var(--color-border-soft)] col-span-1 sm:col-span-3">
+                {!editingId ? (
+                  <button
+                    type="button"
+                    onClick={addBag}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-md text-sm font-medium text-[var(--color-brass)] bg-[var(--color-paper)] border border-[var(--color-brass)]/35 hover:border-[var(--color-brass)] hover:bg-white transition-all cursor-pointer whitespace-nowrap shadow-2xs active:scale-[0.98] w-full sm:w-auto"
+                  >
+                    <Plus size={15} strokeWidth={2.5} /> Add Another
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={closeForm}
+                    disabled={saving}
+                    className="flex-1 sm:flex-none py-2"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={saving}
+                    className="flex-1 sm:flex-none py-2"
+                  >
+                    <Check size={16} /> {saving ? 'Saving…' : editingId ? 'Update' : 'Save'}
+                  </Button>
+                </div>
               </div>
             </div>
+          ) : (
+            /* ── Multi-Bag Mode: Clean & Compact List with Per Rola ── */
+            <div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3 pb-3 border-b border-[var(--color-border-soft)]">
+                <Field label="Party *">
+                  <Select
+                    required
+                    value={header.partyId}
+                    onChange={(e) => handlePartyChange(e.target.value)}
+                  >
+                    {parties.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
 
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={closeForm}
-              disabled={saving}
-              className="px-2 py-1 text-xs"
-            >
-              <X size={15} /> Close
-            </Button>
-          </div>
+                <Field label="Date">
+                  <TextInput
+                    type="date"
+                    required
+                    value={header.date}
+                    onChange={(e) => setHeader({ ...header, date: e.target.value })}
+                  />
+                </Field>
 
-          {/* Common Batch Details Header */}
-          <div
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 rounded-lg mb-6"
-            style={{ background: 'var(--color-paper)', border: '1px solid var(--color-border-soft)' }}
-          >
-            <Field label="Party *">
-              <Select
-                required
-                value={header.partyId}
-                onChange={(e) => setHeader({ ...header, partyId: e.target.value })}
-              >
-                {parties.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+                <Field label="Kasab Color">
+                  <Select
+                    value={header.color}
+                    onChange={(e) => setHeader({ ...header, color: e.target.value })}
+                  >
+                    <option value="">— None —</option>
+                    {COLOR_TYPES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
 
-            <Field label="Receiving Date *">
-              <TextInput
-                type="date"
-                required
-                value={header.date}
-                onChange={(e) => setHeader({ ...header, date: e.target.value })}
-              />
-            </Field>
+                <Field label="Challan Number">
+                  <TextInput
+                    placeholder="e.g. CH-1042"
+                    value={header.challanNo}
+                    onChange={(e) => setHeader({ ...header, challanNo: e.target.value })}
+                  />
+                </Field>
+              </div>
 
-            <Field label="Kasab Color (Optional)">
-              <Select
-                value={header.color}
-                onChange={(e) => setHeader({ ...header, color: e.target.value })}
-              >
-                <option value="">— None —</option>
-                {COLOR_TYPES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+              {/* Compact Bags Rows */}
+              <div className="space-y-2.5 mb-4">
+                <div className="flex items-center justify-between text-xs font-medium text-[var(--color-ink-soft)] px-1 flex-wrap gap-2">
+                  <span className="font-semibold text-[var(--color-ink)]">Bag Entries ({bags.length})</span>
+                  <div className="flex items-center gap-1.5 bg-[var(--color-paper)] px-2 py-1 rounded border border-[var(--color-border-soft)]">
+                    <span className="text-[11px]">Default Per Rola:</span>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="200"
+                      className="w-14 px-1.5 py-0.5 rounded border bg-white text-xs tabular-nums font-semibold outline-none text-center"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-ink)' }}
+                      value={rememberedPerRola}
+                      onChange={(e) => updateDefaultPerRola(e.target.value)}
+                    />
+                    <span className="text-[11px]">g</span>
+                    {(() => {
+                      const selectedP = parties.find((p) => p.id === header.partyId)
+                      const isCustom = Boolean(selectedP?.default_rola_weight_g)
+                      return (
+                        <span
+                          className={[
+                            'text-[10px] px-1.5 py-0.2 rounded font-medium ml-0.5',
+                            isCustom
+                              ? 'bg-[var(--color-brass)]/15 text-[var(--color-brass)] font-semibold'
+                              : 'text-[var(--color-ink-soft)]',
+                          ].join(' ')}
+                        >
+                          {isCustom ? 'Party Default' : 'Global Default'}
+                        </span>
+                      )
+                    })()}
+                  </div>
+                </div>
 
-            <Field label="Challan Number (Optional)">
-              <TextInput
-                placeholder="e.g. CH-1042"
-                value={header.challanNo}
-                onChange={(e) => setHeader({ ...header, challanNo: e.target.value })}
-              />
-            </Field>
-          </div>
-
-          {/* Bags List Section */}
-          <div className="mb-6">
-            <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-ink-soft)' }}>
-                Bag Entries ({bags.length})
-              </h4>
-            </div>
-
-            <div className="flex flex-col divide-y divide-[var(--color-border-soft)]">
-              {bagValidations.map(({ bag: b, validation }, index) => {
-                const showGrossError =
-                  Boolean(validation.grossError) &&
-                  (b.touched?.gross || submitAttempted)
-                const showRolaError =
-                  Boolean(validation.rolaError) &&
-                  (b.touched?.rola || submitAttempted)
-                const showPerRolaError =
-                  Boolean(validation.perRolaError) &&
-                  (b.touched?.perRola || submitAttempted)
-                const isTareInvalid = Boolean(validation.tareError)
-
-                return (
+                {bagCalculations.map(({ bag: b, tareKg, netKg }, idx) => (
                   <div
                     key={b.id}
-                    className="py-4 first:pt-0 last:pb-0"
+                    className="p-2.5 sm:p-2 rounded-lg bg-[var(--color-paper)] border border-[var(--color-border-soft)] text-xs flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5"
                   >
-                    {/* Bag Strip Header */}
-                    <div className="flex items-center justify-between mb-2.5">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="px-2 py-0.5 rounded text-xs font-semibold"
-                          style={{
-                            background: 'var(--color-border-soft)',
-                            color: 'var(--color-ink)',
-                          }}
-                        >
-                          Bag {index + 1}
-                        </span>
-
-                        {validation.isValid ? (
-                          <span
-                            className="px-1.5 py-0.5 rounded text-[11px] font-medium flex items-center gap-1"
-                            style={{
-                              background: 'var(--color-positive-bg)',
-                              color: 'var(--color-positive)',
-                            }}
-                          >
-                            <Check size={11} strokeWidth={2.5} /> Complete
-                          </span>
-                        ) : (
-                          <span
-                            className="px-1.5 py-0.5 rounded text-[11px] font-medium flex items-center gap-1"
-                            style={{
-                              background: 'var(--color-due-bg)',
-                              color: 'var(--color-due)',
-                            }}
-                          >
-                            <AlertCircle size={11} /> Incomplete
-                          </span>
-                        )}
-                      </div>
-
-                      {!isEditing && bags.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeBagRow(b.id)}
-                          className="text-xs font-medium inline-flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity"
-                          style={{ color: 'var(--color-due)' }}
-                          title="Remove Bag"
-                        >
-                          <Trash2 size={13} /> Remove
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Inputs Row: Gross Weight & Rola Count */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-                      {/* 1. Gross Weight Input (grams) */}
-                      <div>
-                        <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--color-ink)' }}>
-                          Gross Weight (grams) *
-                        </label>
-                        <TextInput
-                          required
-                          type="number"
-                          inputMode="numeric"
-                          step="1"
-                          min="1"
-                          placeholder="e.g. 23535"
-                          value={b.grossGrams}
-                          style={{
-                            borderColor: showGrossError ? 'var(--color-due)' : undefined,
-                          }}
-                          onBlur={() => markTouched(b.id, 'gross')}
-                          onChange={(e) => {
-                            const val = e.target.value.replace(/[^0-9]/g, '')
-                            updateBagField(b.id, 'grossGrams', val)
-                          }}
-                        />
-                        {showGrossError && (
-                          <span
-                            className="text-xs font-medium mt-1 flex items-center gap-1"
-                            style={{ color: 'var(--color-due)' }}
-                          >
-                            <AlertCircle size={11} className="shrink-0" />
-                            {validation.grossError}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* 2. Rola Count Input + Change Default */}
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-xs font-semibold" style={{ color: 'var(--color-ink)' }}>
-                            Rola Count *
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setShowPerRola((prev) => ({ ...prev, [b.id]: !prev[b.id] }))
-                            }
-                            className="text-[11px] font-normal cursor-pointer hover:underline"
-                            style={{ color: 'var(--color-brass)' }}
-                          >
-                            {showPerRola[b.id] ? 'Done' : `change default (${b.perRolaGrams || rememberedPerRola}g)`}
-                          </button>
-                        </div>
-                        <TextInput
-                          required
-                          type="number"
-                          inputMode="numeric"
-                          step="1"
-                          min="0"
-                          placeholder="e.g. 60"
-                          value={b.rolaCount}
-                          style={{
-                            borderColor: showRolaError ? 'var(--color-due)' : undefined,
-                          }}
-                          onBlur={() => markTouched(b.id, 'rola')}
-                          onChange={(e) => {
-                            const val = e.target.value.replace(/[^0-9]/g, '')
-                            updateBagField(b.id, 'rolaCount', val)
-                          }}
-                        />
-                        {showRolaError && (
-                          <span
-                            className="text-xs font-medium mt-1 flex items-center gap-1"
-                            style={{ color: 'var(--color-due)' }}
-                          >
-                            <AlertCircle size={11} className="shrink-0" />
-                            {validation.rolaError}
-                          </span>
-                        )}
-
-                        {(showPerRola[b.id] || showPerRolaError) && (
-                          <div
-                            className="flex items-center gap-2 mt-2 p-2 rounded text-xs"
-                            style={{
-                              background: 'var(--color-paper)',
-                              border: '1px solid var(--color-border-soft)',
-                            }}
-                          >
-                            <span style={{ color: 'var(--color-ink-soft)' }}>Per rola weight:</span>
-                            <input
-                              type="number"
-                              inputMode="numeric"
-                              min="1"
-                              className="w-20 px-2 py-1 text-xs rounded border tabular-nums font-semibold bg-white"
-                              style={{ borderColor: 'var(--color-border)', color: 'var(--color-ink)' }}
-                              value={b.perRolaGrams}
-                              placeholder="200"
-                              onBlur={() => markTouched(b.id, 'perRola')}
-                              onChange={(e) => updateBagField(b.id, 'perRolaGrams', e.target.value)}
-                            />
-                            <span style={{ color: 'var(--color-ink-soft)' }}>g</span>
-                          </div>
-                        )}
-                        {showPerRolaError && (
-                          <span
-                            className="text-xs font-medium mt-1 flex items-center gap-1"
-                            style={{ color: 'var(--color-due)' }}
-                          >
-                            <AlertCircle size={11} className="shrink-0" />
-                            {validation.perRolaError}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Compact Result Line */}
-                    <div className="flex items-center justify-between text-xs mt-2 pt-0.5">
-                      <div className="flex items-center gap-2" style={{ color: 'var(--color-ink-soft)' }}>
-                        <span>
-                          Tare{' '}
-                          <strong className="font-semibold tabular-nums" style={{ color: 'var(--color-ink)' }}>
-                            {fmtKg(validation.tareG / 1000)}
-                          </strong>
+                    {/* Mobile Strip Top: Bag title & Results */}
+                    <div className="flex items-center justify-between sm:hidden pb-1 border-b border-[var(--color-border-soft)]">
+                      <span className="font-bold text-xs text-[var(--color-ink)]">
+                        Bag {idx + 1}
+                      </span>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-[var(--color-ink-soft)]">
+                          Tare: <strong className="font-medium text-[var(--color-ink)]">{fmtKg(tareKg)}</strong>
                         </span>
                         <span>·</span>
-                        <span>
-                          Net{' '}
-                          <strong
-                            className="font-bold tabular-nums"
-                            style={{ color: validation.grossG > 0 ? 'var(--color-brass)' : 'var(--color-ink)' }}
-                          >
-                            {validation.grossG > 0 ? fmtKg(validation.netG / 1000) : '0.000 kg'}
-                          </strong>
+                        <span className="text-[var(--color-ink)] font-semibold">
+                          Net: <strong className="text-[var(--color-brass)]">{fmtKg(netKg)}</strong>
                         </span>
+                        {bags.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeBag(b.id)}
+                            className="p-1 text-[var(--color-due)] hover:opacity-75 cursor-pointer ml-1"
+                            title="Remove bag"
+                            aria-label="Remove bag"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Desktop Bag # label */}
+                    <span className="hidden sm:inline-block font-semibold text-xs text-[var(--color-ink)] w-12 shrink-0">
+                      Bag {idx + 1}
+                    </span>
+
+                    {/* Inputs Row */}
+                    <div className="grid grid-cols-3 sm:flex sm:items-center gap-2 flex-1">
+                      {/* Gross Input */}
+                      <div className="col-span-1 sm:flex-1 min-w-0">
+                        <label className="block sm:hidden text-[10px] text-[var(--color-ink-soft)] mb-0.5 font-medium">
+                          Gross (kg)
+                        </label>
+                        <input
+                          required
+                          type="number"
+                          step="0.001"
+                          min="0.001"
+                          placeholder="Gross (kg)"
+                          className="w-full px-2 py-1.5 rounded border bg-white text-xs tabular-nums outline-none"
+                          style={{ borderColor: 'var(--color-border)' }}
+                          value={b.gross}
+                          onChange={(e) => updateBag(b.id, 'gross', e.target.value)}
+                        />
                       </div>
 
-                      {isTareInvalid && (
-                        <span
-                          className="text-xs font-medium flex items-center gap-1"
-                          style={{ color: 'var(--color-due)' }}
-                        >
-                          <AlertCircle size={11} className="shrink-0" />
-                          {validation.tareError}
-                        </span>
-                      )}
+                      {/* Rola Input */}
+                      <div className="col-span-1 sm:w-20 min-w-0">
+                        <label className="block sm:hidden text-[10px] text-[var(--color-ink-soft)] mb-0.5 font-medium">
+                          Rola Count
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="Rola"
+                          className="w-full px-2 py-1.5 rounded border bg-white text-xs tabular-nums outline-none"
+                          style={{ borderColor: 'var(--color-border)' }}
+                          value={b.rolaCount}
+                          onChange={(e) => updateBag(b.id, 'rolaCount', e.target.value)}
+                        />
+                      </div>
+
+                      {/* Per Rola Input */}
+                      <div className="col-span-1 sm:w-20 min-w-0">
+                        <label className="block sm:hidden text-[10px] text-[var(--color-ink-soft)] mb-0.5 font-medium">
+                          Per Rola (g)
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="200"
+                            className="w-full px-1.5 py-1.5 rounded border bg-white text-xs tabular-nums outline-none text-center"
+                            style={{ borderColor: 'var(--color-border)' }}
+                            value={b.perRolaGrams}
+                            title="Per rola weight in grams"
+                            onChange={(e) => updateBag(b.id, 'perRolaGrams', e.target.value)}
+                          />
+                          <span className="text-[10px] text-[var(--color-ink-soft)] hidden sm:inline">g</span>
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Desktop Results */}
+                    <div className="hidden sm:block text-right tabular-nums text-[var(--color-ink-soft)] shrink-0 w-24">
+                      Tare: <strong className="font-medium text-[var(--color-ink)]">{fmtKg(tareKg)}</strong>
+                    </div>
+
+                    <div className="hidden sm:block text-right tabular-nums text-[var(--color-ink)] shrink-0 w-28 font-semibold">
+                      Net: <strong className="text-[var(--color-brass)]">{fmtKg(netKg)}</strong>
+                    </div>
+
+                    {bags.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeBag(b.id)}
+                        className="hidden sm:block p-1 text-[var(--color-due)] hover:opacity-75 cursor-pointer shrink-0"
+                        title="Remove bag"
+                        aria-label="Remove bag"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
-                )
-              })}
-            </div>
-
-            {/* ONLY ONE Add Button: at the bottom of the bag list */}
-            {!isEditing && (
-              <div className="mt-4">
-                <button
-                  type="button"
-                  onClick={addBagRow}
-                  className="w-full py-2.5 px-4 rounded-xl border border-dashed text-sm font-medium flex items-center justify-center gap-2 cursor-pointer hover:bg-[#fbf9f4] transition-colors"
-                  style={{
-                    borderColor: 'var(--color-brass)',
-                    color: 'var(--color-brass)',
-                    background: 'transparent',
-                  }}
-                >
-                  <Plus size={16} /> Add Another Bag
-                </button>
+                ))}
               </div>
-            )}
-          </div>
 
-          {/* Compact Batch Summary Line */}
-          <div
-            className="flex items-center justify-between flex-wrap gap-2 py-2.5 px-3.5 rounded-lg mb-5 text-xs"
-            style={{
-              background: 'var(--color-paper)',
-              border: '1px solid var(--color-border-soft)',
-            }}
-          >
-            <div className="flex items-center gap-2 font-medium" style={{ color: 'var(--color-ink-soft)' }}>
-              <span className="font-semibold" style={{ color: 'var(--color-ink)' }}>
-                {bags.length} {bags.length === 1 ? 'bag' : 'bags'}
-              </span>
-              <span>·</span>
-              <span>
-                <strong className="font-bold" style={{ color: 'var(--color-brass)' }}>
-                  {fmtKg(summary.totalNetG / 1000)}
-                </strong>{' '}
-                net
-              </span>
-              <span>·</span>
-              <span className="font-medium" style={{ color: 'var(--color-ink)' }}>
-                {summary.totalRola} Rola
-              </span>
+              {/* Multi-Bag Action Footer */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[var(--color-border-soft)]">
+                <div className="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={addBag}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-md text-xs font-medium text-[var(--color-brass)] bg-[var(--color-paper)] border border-[var(--color-brass)]/35 hover:border-[var(--color-brass)] hover:bg-white transition-all cursor-pointer shadow-2xs active:scale-[0.98]"
+                  >
+                    <Plus size={14} strokeWidth={2.5} /> Add Another
+                  </button>
+
+                  <div className="sm:hidden text-xs text-right">
+                    <span className="text-[var(--color-ink-soft)]">Total Net: </span>
+                    <strong className="text-sm font-bold text-[var(--color-brass)] tabular-nums">
+                      {fmtKg(totalNet)}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                  <span className="text-xs text-[var(--color-ink-soft)] hidden sm:inline">
+                    Total Net:{' '}
+                    <strong className="text-sm font-bold text-[var(--color-brass)]">
+                      {fmtKg(totalNet)}
+                    </strong>{' '}
+                    ({bags.length} bags · {totalRola} rola)
+                  </span>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={closeForm}
+                      disabled={saving}
+                      className="flex-1 sm:flex-none py-2"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={saving}
+                      className="flex-1 sm:flex-none py-2"
+                    >
+                      <Check size={16} />{' '}
+                      {saving ? 'Saving…' : `Save (${bags.length} Bags)`}
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
-            {header.color && (
-              <span className="text-[11px]" style={{ color: 'var(--color-ink-soft)' }}>
-                Color: <strong style={{ color: 'var(--color-ink)' }}>{header.color}</strong>
-              </span>
-            )}
-          </div>
-
-          {/* Form Actions */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <Button
-              type="submit"
-              disabled={!canSave}
-              className="py-2.5 px-5 font-semibold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Check size={16} />{' '}
-              {saving
-                ? 'Saving…'
-                : isEditing
-                ? 'Update Receipt'
-                : bags.length > 1
-                ? `Save All Entries (${bags.length} Bags)`
-                : 'Save Entry'}
-            </Button>
-
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={closeForm}
-              disabled={saving}
-              className="py-2.5 px-4 text-sm"
-            >
-              Cancel
-            </Button>
-
-            {!allBagsValid && (
-              <span className="text-xs font-medium flex items-center gap-1" style={{ color: 'var(--color-due)' }}>
-                <AlertCircle size={13} className="shrink-0" />
-                Fill all required fields in each bag to enable save
-              </span>
-            )}
-          </div>
+          )}
         </form>
       )}
 
-      {/* ── Challan-Grouped Table View ─────────────────────────────── */}
-      {receipts.length === 0 && !loading ? (
-        <EmptyState text="No receiving entries yet." />
+      {/* ── Table View (Exact previous clean design) ──────────────── */}
+      {filteredReceipts.length === 0 && !loading ? (
+        <EmptyState text={`No receiving entries found for ${formattedMonth}.`} />
       ) : (
         <div
-          className="overflow-x-auto rounded-xl shadow-xs"
-          style={{ background: 'var(--color-paper)' }}
+          className="overflow-x-auto rounded-lg bg-white shadow-xs"
+          style={{ border: '1px solid var(--color-border)' }}
         >
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full text-sm border-collapse min-w-[720px]">
             <thead>
-              <tr
-                style={{
-                  background: 'var(--color-border-soft)',
-                  borderTop: '1px solid var(--color-border)',
-                  borderBottom: '1.5px solid var(--color-border)',
-                }}
-              >
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{
-                    color: 'var(--color-ink-soft)',
-                    fontSize: '0.75rem',
-                    borderLeft: '1px solid var(--color-border)',
-                  }}
-                >
-                  Bag #
+              <tr style={{ background: 'var(--color-border-soft)' }}>
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
+                  Date
                 </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
+                  Party
+                </th>
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
                   Color
                 </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
                   Gross (kg)
                 </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
                   Tare (kg)
                 </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
                   Net Wt (kg)
                 </th>
-                <th
-                  className="text-left px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{ color: 'var(--color-ink-soft)', fontSize: '0.75rem' }}
-                >
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
+                  Challan #
+                </th>
+                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
                   Rola
                 </th>
-                <th
-                  className="text-right px-3 py-2.5 font-medium whitespace-nowrap"
-                  style={{
-                    color: 'var(--color-ink-soft)',
-                    fontSize: '0.75rem',
-                    borderRight: '1px solid var(--color-border)',
-                  }}
-                >
-                  Actions
-                </th>
+                <th className="text-right px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {challanGroups.map((group, groupIdx) => {
-                // Alternating background per WHOLE CHALLAN GROUP
-                const groupBagBg = groupIdx % 2 === 0 ? '#FFFFFF' : '#FAF7F0'
-
-                return (
-                  <Fragment key={group.id}>
-                    {/* Vertical spacing (18px margin) between consecutive challan groups */}
-                    {groupIdx > 0 && (
-                      <tr aria-hidden="true" style={{ border: 'none' }}>
-                        <td
-                          colSpan={7}
-                          style={{
-                            height: '18px',
-                            padding: 0,
-                            border: 'none',
-                            background: 'var(--color-paper)',
-                          }}
-                        />
-                      </tr>
-                    )}
-
-                    {/* Group Header Strip: distinctly darker/warmer than table header, heavier typography */}
-                    <tr
-                      style={{
-                        background: '#DECDB0',
-                        borderTop: '1px solid #C8B693',
-                        borderBottom: '1px solid #C8B693',
-                      }}
-                    >
-                      <td
-                        colSpan={7}
-                        className="px-3.5 py-2.5 text-xs"
-                        style={{
-                          borderLeft: '4px solid #A6752B',
-                          borderRight: '1px solid #C8B693',
-                        }}
+              {filteredReceipts.map((r) => (
+                <tr
+                  key={r.id}
+                  className="hover:bg-[#FAF8F3] transition-colors"
+                  style={{ borderTop: '1px solid var(--color-border-soft)' }}
+                >
+                  <td className="px-4 py-3.5 whitespace-nowrap text-sm text-[var(--color-ink)]">
+                    {fmtDate(r.date)}
+                  </td>
+                  <td className="px-4 py-3.5 font-bold whitespace-nowrap text-sm text-[var(--color-ink)]">
+                    {r.party?.name ?? '—'}
+                  </td>
+                  <td className="px-4 py-3.5 whitespace-nowrap text-sm text-[var(--color-ink)]">
+                    {r.color || '—'}
+                  </td>
+                  <td className="px-4 py-3.5 whitespace-nowrap text-sm tabular-nums text-[var(--color-ink)]">
+                    {fmtKg(r.gross_weight)}
+                  </td>
+                  <td className="px-4 py-3.5 whitespace-nowrap text-sm tabular-nums text-[var(--color-ink)]">
+                    {fmtKg(r.tare_weight)}
+                  </td>
+                  <td
+                    className="px-4 py-3.5 whitespace-nowrap text-sm tabular-nums font-bold"
+                    style={{ color: 'var(--color-brass)' }}
+                  >
+                    {fmtKg(r.net_weight)}
+                  </td>
+                  <td className="px-4 py-3.5 whitespace-nowrap text-sm text-[var(--color-ink)]">
+                    {r.challan_no || '—'}
+                  </td>
+                  <td className="px-4 py-3.5 whitespace-nowrap text-sm tabular-nums text-[var(--color-ink)]">
+                    {r.rola_count || 0}
+                  </td>
+                  <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(r)}
+                        className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] cursor-pointer transition-colors"
+                        title="Edit receipt"
+                        aria-label="Edit receipt"
                       >
-                        <div className="flex items-center justify-between flex-wrap gap-2.5">
-                          <div className="flex items-center gap-2.5">
-                            {group.challanNo ? (
-                              <span
-                                className="px-2.5 py-1 rounded font-bold text-sm tracking-wide shadow-xs inline-flex items-center gap-1"
-                                style={{
-                                  background: 'var(--color-ink)',
-                                  color: '#FAF7F0',
-                                }}
-                              >
-                                Challan #{group.challanNo}
-                              </span>
-                            ) : (
-                              <span
-                                className="px-2.5 py-1 rounded font-bold text-xs tracking-wide uppercase inline-flex items-center"
-                                style={{
-                                  background: 'rgba(36, 31, 25, 0.12)',
-                                  color: 'var(--color-ink)',
-                                }}
-                              >
-                                No Challan
-                              </span>
-                            )}
-                            <span className="font-bold text-sm" style={{ color: 'var(--color-ink)' }}>
-                              {group.partyName}
-                            </span>
-                            <span className="text-xs" style={{ color: 'var(--color-ink-soft)' }}>
-                              • {fmtDate(group.date)}
-                            </span>
-                            <span
-                              className="px-2 py-0.5 rounded-full text-xs font-semibold"
-                              style={{
-                                background: 'rgba(36, 31, 25, 0.08)',
-                                color: 'var(--color-ink)',
-                              }}
-                            >
-                              {group.receipts.length} {group.receipts.length === 1 ? 'Bag' : 'Bags'}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-4 text-xs font-medium" style={{ color: 'var(--color-ink)' }}>
-                            <span>
-                              Batch Net:{' '}
-                              <strong className="font-extrabold text-sm tabular-nums" style={{ color: 'var(--color-brass-dark)' }}>
-                                {fmtKg(group.totalNet)}
-                              </strong>
-                            </span>
-                            <span>
-                              Total Rola:{' '}
-                              <strong className="font-bold text-sm tabular-nums">
-                                {group.totalRola}
-                              </strong>
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-
-                    {/* Individual Bag Rows belonging to this group */}
-                    {group.receipts.map((r, bagIdx) => {
-                      const isLastBag = bagIdx === group.receipts.length - 1
-
-                      return (
-                        <tr
-                          key={r.id}
-                          style={{
-                            background: groupBagBg,
-                            borderTop: '1px solid var(--color-border-soft)',
-                            borderBottom: isLastBag ? '1px solid var(--color-border)' : undefined,
-                          }}
+                        <Pencil size={15} />
+                      </button>
+                      {deleting === r.id ? (
+                        <ConfirmDelete
+                          onConfirm={() => handleDelete(r.id)}
+                          onCancel={() => setDeleting(null)}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setDeleting(r.id)}
+                          className="p-1 text-[var(--color-due)] hover:opacity-75 cursor-pointer transition-colors"
+                          title="Delete receipt"
+                          aria-label="Delete receipt"
                         >
-                          <td
-                            className="px-3.5 py-2.5 whitespace-nowrap"
-                            style={{
-                              borderLeft: '4px solid #A6752B',
-                            }}
-                          >
-                            <span
-                              className="px-2 py-0.5 rounded-full text-xs font-semibold"
-                              style={{
-                                background: 'var(--color-border-soft)',
-                                color: 'var(--color-ink)',
-                              }}
-                            >
-                              Bag {bagIdx + 1}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5">{r.color || '—'}</td>
-                          <td className="px-3 py-2.5 tabular-nums">{fmtKg(r.gross_weight)}</td>
-                          <td className="px-3 py-2.5 tabular-nums">{fmtKg(r.tare_weight)}</td>
-                          <td
-                            className="px-3 py-2.5 tabular-nums font-bold"
-                            style={{ color: 'var(--color-brass)' }}
-                          >
-                            {fmtKg(r.net_weight)}
-                          </td>
-                          <td className="px-3 py-2.5 tabular-nums font-medium">{r.rola_count || 0}</td>
-                          <td
-                            className="px-3 py-2.5 text-right whitespace-nowrap"
-                            style={{
-                              borderRight: '1px solid var(--color-border)',
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => editReceipt(r)}
-                              className="p-1 cursor-pointer hover:opacity-75 transition-opacity"
-                              style={{ color: 'var(--color-ink-soft)' }}
-                              title="Edit bag entry"
-                              aria-label="Edit bag entry"
-                            >
-                              <Pencil size={14} />
-                            </button>
-                            {deleting === r.id ? (
-                              <ConfirmDelete
-                                onConfirm={() => handleDelete(r.id)}
-                                onCancel={() => setDeleting(null)}
-                              />
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setDeleting(r.id)}
-                                className="p-1 cursor-pointer hover:opacity-75 transition-opacity"
-                                style={{ color: 'var(--color-due)' }}
-                                title="Delete bag entry"
-                                aria-label="Delete bag entry"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </Fragment>
-                )
-              })}
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
