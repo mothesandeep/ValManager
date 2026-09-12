@@ -1,45 +1,41 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Check, AlertCircle } from 'lucide-react'
-import {
-  fetchParties,
-  fetchReceipts,
-  insertReceipts,
-  updateReceipt,
-  deleteReceipt,
-  type ReceiptPayload,
-} from '../lib/queries'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Plus, Trash2, X, AlertCircle, ChevronDown, Pencil } from 'lucide-react'
+import { useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { fetchParties } from '../lib/api/parties'
+import { fetchReceipts, insertReceipts, updateReceipt, deleteReceipt, type ReceiptPayload } from '../lib/api/receipts'
+
+
 import type { Party, ReceiptWithParty } from '../types'
 import { COLOR_TYPES, fmtDate, fmtKg, todayStr } from '../types'
-import {
-  SectionHeader,
-  KpiCard,
-  Button,
-  Field,
-  TextInput,
-  Select,
-  EmptyState,
-  ConfirmDelete,
-} from '../components/ui/UIComponents'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { KpiCard } from '../components/ui/KpiCard'
+import { Button } from '../components/ui/Button'
+import { EmptyState } from '../components/ui/EmptyState'
 import { useMonth } from '../context/MonthContext'
-import { resolvePartyRolaWeight, getGlobalSettings } from '../lib/settings'
+import { resolvePartyRolaWeight, resolvePartyBigRolaWeight, getGlobalSettings } from '../lib/settings'
 
 const STORAGE_KEY_PER_ROLA = 'kasab_last_per_rola_weight'
 
 interface BagItem {
   id: string
-  gross: string       // in kg (e.g. "30.500")
-  rolaCount: string   // integer
-  perRolaGrams: string // e.g. "200"
+  gross: string
+  rolaCount: string
+  perRolaGrams: string
+  color: string
+  twistType: 'S' | 'Z'
+  sizeType: 'Norm' | 'Big'
 }
 
 interface FormHeader {
   partyId: string
   date: string
-  color: string
   challanNo: string
 }
 
 export default function Receiving() {
+    const hasAutoOpened = useRef(false)
+const [searchParams, setSearchParams] = useSearchParams()
   const { filterByMonth, formattedMonth } = useMonth()
   const [receipts, setReceipts] = useState<ReceiptWithParty[]>([])
   const [parties, setParties] = useState<Party[]>([])
@@ -55,11 +51,9 @@ export default function Receiving() {
   const [header, setHeader] = useState<FormHeader>({
     partyId: '',
     date: todayStr(),
-    color: '',
     challanNo: '',
   })
 
-  // Remembered per-rola weight (grams)
   const [rememberedPerRola, setRememberedPerRola] = useState<string>(() => {
     return String(getGlobalSettings().defaultRolaGrams)
   })
@@ -69,6 +63,9 @@ export default function Receiving() {
     gross: '',
     rolaCount: '',
     perRolaGrams: customPerRola || rememberedPerRola || '200',
+    color: 'M.gold',
+    twistType: 'S',
+    sizeType: 'Norm',
   })
 
   const [bags, setBags] = useState<BagItem[]>([createBlankBag()])
@@ -103,15 +100,38 @@ export default function Receiving() {
   const handlePartyChange = (newPartyId: string) => {
     const selectedParty = parties.find((p) => p.id === newPartyId)
     const partyRola = String(resolvePartyRolaWeight(selectedParty))
+    const partyBigRola = String(resolvePartyBigRolaWeight(selectedParty))
     setHeader((prev) => ({ ...prev, partyId: newPartyId }))
     setRememberedPerRola(partyRola)
     setBags((prev) =>
       prev.map((b) => ({
         ...b,
-        perRolaGrams: partyRola,
+        perRolaGrams: b.sizeType === 'Big' ? partyBigRola : partyRola,
       }))
     )
   }
+  
+  const handleSizeTypeChange = (id: string, size: 'Norm' | 'Big') => {
+    const selectedParty = parties.find(p => p.id === header.partyId)
+    const newPerRola = size === 'Big' 
+      ? String(resolvePartyBigRolaWeight(selectedParty)) 
+      : String(resolvePartyRolaWeight(selectedParty))
+      
+    setBags(prev => prev.map(b => b.id === id ? { ...b, sizeType: size, perRolaGrams: newPerRola } : b))
+  }
+
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'new' && parties.length > 0 && !isOpen) {
+      if (!hasAutoOpened.current) {
+        hasAutoOpened.current = true
+        startAdd()
+        const newParams = new URLSearchParams(searchParams)
+        newParams.delete('action')
+        setSearchParams(newParams, { replace: true })
+      }
+    }
+  }, [searchParams, parties, isOpen, setSearchParams])
 
   const startAdd = () => {
     setEditingId(null)
@@ -121,7 +141,6 @@ export default function Receiving() {
     setHeader({
       partyId: firstParty?.id || '',
       date: todayStr(),
-      color: '',
       challanNo: '',
     })
     setBags([createBlankBag(initialRola)])
@@ -134,14 +153,16 @@ export default function Receiving() {
     setHeader({
       partyId: r.party_id || parties[0]?.id || '',
       date: r.date,
-      color: r.color || '',
       challanNo: r.challan_no || '',
     })
 
     const rolaCnt = r.rola_count ?? 0
+    const boriKg = getGlobalSettings().defaultBoriGrams / 1000 || 0.1
+    const tareWithoutBori = (r.gross_weight > 0 && r.tare_weight >= boriKg) ? r.tare_weight - boriKg : r.tare_weight
+    
     const originalPerRola =
       rolaCnt > 0
-        ? String(Math.round((r.tare_weight * 1000) / rolaCnt))
+        ? String(Math.round((tareWithoutBori * 1000) / rolaCnt))
         : rememberedPerRola || '200'
 
     setBags([
@@ -150,6 +171,9 @@ export default function Receiving() {
         gross: String(r.gross_weight),
         rolaCount: String(rolaCnt),
         perRolaGrams: originalPerRola,
+        color: r.color || 'M.gold',
+        twistType: 'S',
+        sizeType: 'Norm'
       },
     ])
     setIsOpen(true)
@@ -171,15 +195,6 @@ export default function Receiving() {
     setBags((prev) => prev.filter((b) => b.id !== id))
   }
 
-  const updateDefaultPerRola = (val: string) => {
-    const clean = val.replace(/[^0-9]/g, '')
-    setRememberedPerRola(clean)
-    try {
-      if (clean) localStorage.setItem(STORAGE_KEY_PER_ROLA, clean)
-    } catch {}
-    setBags((prev) => prev.map((b) => ({ ...b, perRolaGrams: clean || '200' })))
-  }
-
   const updateBag = (id: string, field: keyof BagItem, val: string) => {
     if (field === 'perRolaGrams') {
       const clean = val.replace(/[^0-9]/g, '')
@@ -193,16 +208,20 @@ export default function Receiving() {
     )
   }
 
-  // Calculate tare & net for a bag
   const calcBagValues = (b: BagItem) => {
     let grossKg = parseFloat(b.gross) || 0
-    // Auto handle if user typed grams as whole number (e.g. 30500 => 30.5 kg)
     if (grossKg > 500) {
       grossKg = grossKg / 1000
     }
     const rola = parseInt(b.rolaCount, 10) || 0
-    const perRola = parseInt(b.perRolaGrams, 10) || 200
-    const tareKg = (rola * perRola) / 1000
+    
+    const selectedParty = parties.find(p => p.id === header.partyId)
+    const normWeight = resolvePartyRolaWeight(selectedParty)
+    const bigWeight = resolvePartyBigRolaWeight(selectedParty)
+    const perRola = b.sizeType === 'Big' ? bigWeight : normWeight
+
+    const boriKg = getGlobalSettings().defaultBoriGrams / 1000 || 0.1
+    const tareKg = ((rola * perRola) / 1000) + (grossKg > 0 ? boriKg : 0)
     const netKg = Math.max(0, grossKg - tareKg)
     return { grossKg, rola, perRola, tareKg, netKg }
   }
@@ -212,8 +231,7 @@ export default function Receiving() {
     ...calcBagValues(b),
   }))
 
-  const totalNet = bagCalculations.reduce((sum, b) => sum + b.netKg, 0)
-  const totalRola = bagCalculations.reduce((sum, b) => sum + b.rola, 0)
+  const totalFormNet = bagCalculations.reduce((sum, b) => sum + b.netKg, 0)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -228,7 +246,6 @@ export default function Receiving() {
       return
     }
 
-    // Validate all bags
     for (let i = 0; i < bagCalculations.length; i++) {
       const { grossKg, tareKg } = bagCalculations[i]
       const bNum = i + 1
@@ -247,12 +264,11 @@ export default function Receiving() {
 
     try {
       if (editingId) {
-        // Single bag update
         const val = bagCalculations[0]
         const payload: ReceiptPayload = {
           party_id: header.partyId,
           date: header.date,
-          color: header.color.trim() || null,
+          color: val.bag.color.trim() || null,
           challan_no: header.challanNo.trim() || null,
           gross_weight: val.grossKg,
           tare_weight: val.tareKg,
@@ -260,11 +276,10 @@ export default function Receiving() {
         }
         await updateReceipt(editingId, payload)
       } else {
-        // Multi-bag batch insert
         const payloads: ReceiptPayload[] = bagCalculations.map((val) => ({
           party_id: header.partyId,
           date: header.date,
-          color: header.color.trim() || null,
+          color: val.bag.color.trim() || null,
           challan_no: header.challanNo.trim() || null,
           gross_weight: val.grossKg,
           tare_weight: val.tareKg,
@@ -283,596 +298,524 @@ export default function Receiving() {
       setSaving(false)
     }
   }
-
+  
+  
+  
   const handleDelete = async (id: string) => {
     try {
       await deleteReceipt(id)
       setDeleting(null)
+      if (editingId === id) closeForm()
       await loadData()
-    } catch (err: unknown) {
-      console.error('Delete receipt error:', err)
-      const msg = err instanceof Error ? err.message : String(err)
-      setErrorMsg(`Delete failed — ${msg}`)
+    } catch (err) {
+      console.error('Delete error:', err)
+      setErrorMsg('Could not delete receipt')
     }
   }
 
-  const isSingleBag = bags.length === 1
-  const firstBagCalc = bagCalculations[0] || { grossKg: 0, rola: 0, tareKg: 0, netKg: 0 }
+  const [expandedChallans, setExpandedChallans] = useState<Set<string>>(new Set())
+  const toggleChallan = (key: string) =>
+    setExpandedChallans((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+
+  const groupedReceipts = useMemo(() => {
+    const groups: Record<string, {
+      id: string,
+      challan_no: string,
+      party_name: string,
+      date: string,
+      gross: number,
+      tare: number,
+      net: number,
+      rola: number,
+      bagsCount: number,
+      receipts: ReceiptWithParty[],
+      hasBig: boolean
+    }> = {}
+
+    filteredReceipts.forEach(r => {
+      const key = `${r.challan_no || 'NO_CH'}_${r.party?.name || 'Unknown'}_${r.date}`
+      if (!groups[key]) {
+        groups[key] = {
+          id: key,
+          challan_no: r.challan_no || '—',
+          party_name: r.party?.name || 'Unknown',
+          date: r.date,
+          gross: 0,
+          tare: 0,
+          net: 0,
+          rola: 0,
+          bagsCount: 0,
+          receipts: [],
+          hasBig: false
+        }
+      }
+      groups[key].gross += Number(r.gross_weight) || 0
+      groups[key].tare += Number(r.tare_weight) || 0
+      groups[key].net += Number(r.net_weight) || 0
+      groups[key].rola += Number(r.rola_count) || 0
+      groups[key].bagsCount += 1
+      groups[key].receipts.push(r)
+      
+      const rolaVal = Number(r.rola_count) || 0
+      if (rolaVal > 0 && Number(r.gross_weight) > 0 && Number(r.tare_weight) > 0) {
+        const boriKg = getGlobalSettings().defaultBoriGrams / 1000 || 0.1
+        const tareVal = Number(r.tare_weight)
+        const tareWithoutBori = tareVal >= boriKg ? tareVal - boriKg : tareVal
+        const perRolaGrams = Math.round((tareWithoutBori * 1000) / rolaVal)
+        const normalWeight = resolvePartyRolaWeight(r.party)
+        if (perRolaGrams > normalWeight + 15) {
+          groups[key].hasBig = true
+        }
+      }
+    })
+
+    return Object.values(groups).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  }, [filteredReceipts])
+
+  const selectedPartyObj = parties.find(p => p.id === header.partyId)
 
   return (
     <div>
       <SectionHeader
         title="Raw Material Receiving"
-        subtitle="Kasab received from parties — weight and challan tracking"
-        action={
-          !isOpen &&
-          parties.length > 0 && (
-            <Button onClick={startAdd}>
-              <Plus size={16} /> New Receipt
-            </Button>
-          )
-        }
+        subtitle="Record raw kasab intake, calculate net weight, and manage Normal/Big rola tare"
       />
 
-      {/* ── Month Summary KPIs ────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-        <KpiCard
-          label="Received Bags"
-          value={filteredReceipts.length}
-          sub={formattedMonth}
-          loading={loading}
-        />
-        <KpiCard
-          label="Net Kasab"
-          value={fmtKg(monthNet)}
-          sub={formattedMonth}
-          tone="positive"
-          loading={loading}
-        />
-        <KpiCard
-          label="Gross Weight"
-          value={fmtKg(monthGross)}
-          sub="raw yarn + rola"
-          loading={loading}
-        />
-        <KpiCard
-          label="Rola Received"
-          value={monthRola}
-          sub="empty spools"
-          loading={loading}
-        />
-      </div>
-
-      {errorMsg && (
-        <div
-          className="rounded-lg p-3 mb-4 text-xs font-medium flex items-center justify-between shadow-xs"
-          style={{
-            background: 'var(--color-due-bg)',
-            color: 'var(--color-due)',
-            border: '1px solid color-mix(in srgb, var(--color-due) 25%, transparent)',
-          }}
-        >
-          <div className="flex items-center gap-1.5">
-            <AlertCircle size={15} className="shrink-0" />
-            <span>{errorMsg}</span>
-          </div>
-          <button
-            onClick={() => setErrorMsg(null)}
-            className="underline cursor-pointer font-semibold"
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        {[
+          { label: 'Received Bags', value: filteredReceipts.length, sub: formattedMonth, color: 'text-gray-900', bg: 'bg-white' },
+          { label: 'Net Kasab', value: fmtKg(monthNet), sub: formattedMonth, color: 'text-[#a57b3f]', bg: 'bg-[#a57b3f]/5' },
+          { label: 'Gross Weight', value: fmtKg(monthGross), sub: 'raw yarn + rola', color: 'text-gray-900', bg: 'bg-white' },
+          { label: 'Rola Received', value: `${monthRola} pcs`, sub: 'empty spools', color: 'text-gray-600', bg: 'bg-gray-50' },
+        ].map(({ label, value, sub, color, bg }) => (
+          <div
+            key={label}
+            className={`rounded-[20px] p-4.5 bg-white shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100/80 ${bg} transition-all hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.08)]`}
           >
-            Dismiss
-          </button>
-        </div>
-      )}
+            <div className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-2">
+              {label}
+            </div>
+            {loading ? (
+              <div className="h-7 w-20 rounded bg-gray-100 animate-pulse mb-1" />
+            ) : (
+              <div className={`text-[19px] font-black tabular-nums leading-none tracking-tight ${color} mb-1.5`}>
+                {value}
+              </div>
+            )}
+            <div className="text-[10px] font-medium text-gray-400">
+              {sub}
+            </div>
+          </div>
+        ))}
+      </div>
 
       {parties.length === 0 && !loading && (
         <EmptyState text="Add a party first before recording receiving entries." />
       )}
 
-      {/* ── Minimal Add / Edit Form (Image 3 layout) ──────────────── */}
+            {/* --- Slide-Up Form Modal --- */}
       {isOpen && (
-        <form
-          onSubmit={submit}
-          className="mb-6 p-4 rounded-lg bg-white border border-[var(--color-border)] shadow-xs"
-        >
-          {isSingleBag ? (
-            /* ── Single Bag Mode: EXACT Image 3 Grid with Rola Wt ── */
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Field label="Party *">
-                <Select
-                  required
-                  value={header.partyId}
-                  onChange={(e) => handlePartyChange(e.target.value)}
-                >
-                  {parties.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-
-              <Field label="Date">
-                <TextInput
-                  type="date"
-                  required
-                  value={header.date}
-                  onChange={(e) => setHeader({ ...header, date: e.target.value })}
-                />
-              </Field>
-
-              <Field label="Kasab Color">
-                <Select
-                  value={header.color}
-                  onChange={(e) => setHeader({ ...header, color: e.target.value })}
-                >
-                  <option value="">— None —</option>
-                  {COLOR_TYPES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-
-              <Field label="Gross Weight (kg) *">
-                <TextInput
-                  required
-                  type="number"
-                  step="0.001"
-                  min="0.001"
-                  placeholder="e.g. 12.500"
-                  value={bags[0].gross}
-                  onChange={(e) => updateBag(bags[0].id, 'gross', e.target.value)}
-                />
-              </Field>
-
-              <Field label="Rola Count">
-                <TextInput
-                  type="number"
-                  min="0"
-                  placeholder="e.g. 12"
-                  value={bags[0].rolaCount}
-                  onChange={(e) => updateBag(bags[0].id, 'rolaCount', e.target.value)}
-                />
-              </Field>
-
-              <Field label="Per Rola Weight (g)">
-                <TextInput
-                  type="number"
-                  min="1"
-                  placeholder="200"
-                  value={bags[0].perRolaGrams}
-                  onChange={(e) => updateBag(bags[0].id, 'perRolaGrams', e.target.value)}
-                />
-              </Field>
-
-              <Field label="Challan Number">
-                <TextInput
-                  placeholder="e.g. CH-1042"
-                  value={header.challanNo}
-                  onChange={(e) => setHeader({ ...header, challanNo: e.target.value })}
-                />
-              </Field>
-
-              <Field label="Tare / Rola Weight (kg)">
-                <div
-                  className="px-3 py-2 rounded-md text-sm tabular-nums flex items-center justify-between min-h-[38px]"
-                  style={{ background: 'var(--color-border-soft)', color: 'var(--color-ink)' }}
-                >
-                  <span>{fmtKg(firstBagCalc.tareKg)}</span>
-                  {firstBagCalc.rola > 0 && (
-                    <span className="text-xs text-[var(--color-ink-soft)]">
-                      ({firstBagCalc.rola} × {bags[0].perRolaGrams || 200}g)
-                    </span>
-                  )}
-                </div>
-              </Field>
-
-              <Field label="Net Weight">
-                <div
-                  className="px-3 py-2 rounded-md text-sm font-semibold tabular-nums flex items-center min-h-[38px]"
-                  style={{ background: 'var(--color-border-soft)', color: 'var(--color-ink)' }}
-                >
-                  {fmtKg(firstBagCalc.netKg)}
-                </div>
-              </Field>
-
-              {/* Action Bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 mt-1 border-t border-[var(--color-border-soft)] col-span-1 sm:col-span-3">
-                {!editingId ? (
-                  <button
-                    type="button"
-                    onClick={addBag}
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-md text-sm font-medium text-[var(--color-brass)] bg-[var(--color-paper)] border border-[var(--color-brass)]/35 hover:border-[var(--color-brass)] hover:bg-white transition-all cursor-pointer whitespace-nowrap shadow-2xs active:scale-[0.98] w-full sm:w-auto"
-                  >
-                    <Plus size={15} strokeWidth={2.5} /> Add Another
-                  </button>
-                ) : <div />}
-
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={closeForm}
-                    disabled={saving}
-                    className="flex-1 sm:flex-none py-2"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={saving}
-                    className="flex-1 sm:flex-none py-2"
-                  >
-                    <Check size={16} /> {saving ? 'Saving…' : editingId ? 'Update' : 'Save'}
-                  </Button>
-                </div>
-              </div>
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-md sm:items-center sm:justify-center p-0 sm:p-4 transition-all">
+          <div className="bg-[#fcfcfb] w-full sm:w-[500px] rounded-t-[24px] sm:rounded-3xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:slide-in-from-bottom-6 duration-400 ease-out max-h-[90dvh] overflow-y-auto">
+            <div className="flex justify-center pt-3 pb-1 bg-white shrink-0 sticky top-0 z-20">
+              <div className="w-12 h-1.5 bg-gray-200 rounded-full"></div>
             </div>
-          ) : (
-            /* ── Multi-Bag Mode: Clean & Compact List with Per Rola ── */
-            <div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3 pb-3 border-b border-[var(--color-border-soft)]">
-                <Field label="Party *">
-                  <Select
-                    required
+            
+            {/* Header */}
+            <div className="px-6 pb-4 pt-2 bg-white flex justify-between items-start shrink-0 sticky top-[20px] z-20 border-b border-gray-100">
+              <div>
+                <p className="text-[10px] font-extrabold tracking-widest text-[#a57b3f]/70 uppercase mb-1.5">
+                  {editingId ? 'EDIT CHALLAN' : 'NEW CHALLAN'}
+                </p>
+                <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                  {parties.find(p => p.id === header.partyId)?.name || 'Select Party'}
+                </h2>
+              </div>
+              <button 
+                onClick={closeForm}
+                className="p-2 -mr-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 transition-colors cursor-pointer"
+              >
+                <X size={20} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            <div className="p-6 relative">
+              {errorMsg && (
+                <div className="mb-5 rounded-[16px] p-4 text-xs font-bold flex items-center gap-2 bg-red-50 text-red-600 border border-red-100">
+                  <AlertCircle size={16} />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
+
+              {/* Form Metadata */}
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">
+                    Party (From M/S) <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    className="w-full h-[48px] px-4 bg-white border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm appearance-none cursor-pointer"
                     value={header.partyId}
                     onChange={(e) => handlePartyChange(e.target.value)}
-                  >
-                    {parties.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-
-                <Field label="Date">
-                  <TextInput
-                    type="date"
                     required
-                    value={header.date}
-                    onChange={(e) => setHeader({ ...header, date: e.target.value })}
-                  />
-                </Field>
-
-                <Field label="Kasab Color">
-                  <Select
-                    value={header.color}
-                    onChange={(e) => setHeader({ ...header, color: e.target.value })}
                   >
-                    <option value="">— None —</option>
-                    {COLOR_TYPES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
+                    <option value="" disabled>Select Party...</option>
+                    {parties.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
-                  </Select>
-                </Field>
-
-                <Field label="Challan Number">
-                  <TextInput
-                    placeholder="e.g. CH-1042"
-                    value={header.challanNo}
-                    onChange={(e) => setHeader({ ...header, challanNo: e.target.value })}
-                  />
-                </Field>
-              </div>
-
-              {/* Compact Bags Rows */}
-              <div className="space-y-2.5 mb-4">
-                <div className="flex items-center justify-between text-xs font-medium text-[var(--color-ink-soft)] px-1 flex-wrap gap-2">
-                  <span className="font-semibold text-[var(--color-ink)]">Bag Entries ({bags.length})</span>
-                  <div className="flex items-center gap-1.5 bg-[var(--color-paper)] px-2 py-1 rounded border border-[var(--color-border-soft)]">
-                    <span className="text-[11px]">Default Per Rola:</span>
-                    <input
-                      type="number"
-                      min="1"
-                      placeholder="200"
-                      className="w-14 px-1.5 py-0.5 rounded border bg-white text-xs tabular-nums font-semibold outline-none text-center"
-                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-ink)' }}
-                      value={rememberedPerRola}
-                      onChange={(e) => updateDefaultPerRola(e.target.value)}
-                    />
-                    <span className="text-[11px]">g</span>
-                    {(() => {
-                      const selectedP = parties.find((p) => p.id === header.partyId)
-                      const isCustom = Boolean(selectedP?.default_rola_weight_g)
-                      return (
-                        <span
-                          className={[
-                            'text-[10px] px-1.5 py-0.2 rounded font-medium ml-0.5',
-                            isCustom
-                              ? 'bg-[var(--color-brass)]/15 text-[var(--color-brass)] font-semibold'
-                              : 'text-[var(--color-ink-soft)]',
-                          ].join(' ')}
-                        >
-                          {isCustom ? 'Party Default' : 'Global Default'}
-                        </span>
-                      )
-                    })()}
-                  </div>
+                  </select>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Ch. No.</label>
+                    <input
+                      placeholder="Optional"
+                      className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                      value={header.challanNo}
+                      onChange={(e) => setHeader({ ...header, challanNo: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Date</label>
+                    <input
+                      type="date"
+                      className="w-full h-[48px] px-4 bg-white border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                      value={header.date}
+                      onChange={(e) => setHeader({ ...header, date: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bags Section */}
+              <div className="space-y-4 mb-6">
                 {bagCalculations.map(({ bag: b, tareKg, netKg }, idx) => (
-                  <div
-                    key={b.id}
-                    className="p-2.5 sm:p-2 rounded-lg bg-[var(--color-paper)] border border-[var(--color-border-soft)] text-xs flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5"
-                  >
-                    {/* Mobile Strip Top: Bag title & Results */}
-                    <div className="flex items-center justify-between sm:hidden pb-1 border-b border-[var(--color-border-soft)]">
-                      <span className="font-bold text-xs text-[var(--color-ink)]">
-                        Bag {idx + 1}
-                      </span>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-[var(--color-ink-soft)]">
-                          Tare: <strong className="font-medium text-[var(--color-ink)]">{fmtKg(tareKg)}</strong>
-                        </span>
-                        <span>·</span>
-                        <span className="text-[var(--color-ink)] font-semibold">
-                          Net: <strong className="text-[var(--color-brass)]">{fmtKg(netKg)}</strong>
-                        </span>
+                  <div key={b.id} className="bg-white border border-gray-200/60 rounded-[20px] p-5 shadow-sm relative transition-all hover:shadow-md">
+                    
+                    {/* Bag Header */}
+                    <div className="flex justify-between items-start mb-5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-full bg-gray-50 border border-gray-200 text-gray-500 flex items-center justify-center text-xs font-black shadow-sm">
+                          {idx + 1}
+                        </div>
+                        <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest">Bag #{idx + 1}</span>
+                      </div>
+                      
+                      <div className="flex items-start gap-4">
+                        <div className="text-right">
+                          <div className="text-[9px] font-extrabold text-gray-400 tracking-widest uppercase mb-0.5">Net Kasab</div>
+                          <div className="text-[20px] font-black text-[#a57b3f] tabular-nums leading-none tracking-tight mb-1">
+                            {fmtKg(netKg)}
+                          </div>
+                          <div className="text-[11px] font-bold text-red-500/90 leading-none">
+                            -{fmtKg(tareKg)}
+                          </div>
+                        </div>
                         {bags.length > 1 && (
                           <button
                             type="button"
                             onClick={() => removeBag(b.id)}
-                            className="p-1 text-[var(--color-due)] hover:opacity-75 cursor-pointer ml-1"
-                            title="Remove bag"
-                            aria-label="Remove bag"
+                            className="p-1.5 -mr-1.5 -mt-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={16} strokeWidth={2.5} />
                           </button>
                         )}
                       </div>
                     </div>
 
-                    {/* Desktop Bag # label */}
-                    <span className="hidden sm:inline-block font-semibold text-xs text-[var(--color-ink)] w-12 shrink-0">
-                      Bag {idx + 1}
-                    </span>
-
-                    {/* Inputs Row */}
-                    <div className="grid grid-cols-3 sm:flex sm:items-center gap-2 flex-1">
-                      {/* Gross Input */}
-                      <div className="col-span-1 sm:flex-1 min-w-0">
-                        <label className="block sm:hidden text-[10px] text-[var(--color-ink-soft)] mb-0.5 font-medium">
-                          Gross (kg)
+                    {/* Inputs */}
+                    <div className="flex gap-3 mb-5">
+                      <div className="flex-[2]">
+                        <label className="block text-[10px] font-extrabold text-gray-400 mb-1.5 uppercase tracking-widest pl-1">
+                          Gross (kg) <span className="text-red-500">*</span>
                         </label>
                         <input
-                          required
                           type="number"
                           step="0.001"
-                          min="0.001"
-                          placeholder="Gross (kg)"
-                          className="w-full px-2 py-1.5 rounded border bg-white text-xs tabular-nums outline-none"
-                          style={{ borderColor: 'var(--color-border)' }}
+                          className="w-full h-[48px] px-4 bg-[#a57b3f]/5 border border-[#a57b3f]/20 rounded-[14px] text-[18px] font-black tabular-nums text-[#8c6530] placeholder:text-[#a57b3f]/30 focus:outline-none focus:bg-white focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                          placeholder="e.g. 30.010"
                           value={b.gross}
                           onChange={(e) => updateBag(b.id, 'gross', e.target.value)}
                         />
                       </div>
-
-                      {/* Rola Input */}
-                      <div className="col-span-1 sm:w-20 min-w-0">
-                        <label className="block sm:hidden text-[10px] text-[var(--color-ink-soft)] mb-0.5 font-medium">
-                          Rola Count
+                      <div className="flex-1 min-w-[80px]">
+                        <label className="block text-[10px] font-extrabold text-gray-400 mb-1.5 uppercase tracking-widest pl-1 text-center">
+                          Rola
                         </label>
                         <input
                           type="number"
-                          min="0"
-                          placeholder="Rola"
-                          className="w-full px-2 py-1.5 rounded border bg-white text-xs tabular-nums outline-none"
-                          style={{ borderColor: 'var(--color-border)' }}
+                          className="w-full h-[48px] px-2 bg-gray-50 border border-gray-200/80 rounded-[14px] text-[18px] font-black tabular-nums text-gray-900 text-center placeholder:text-gray-300 focus:outline-none focus:bg-white focus:border-gray-400 focus:ring-4 focus:ring-gray-100 transition-all shadow-sm"
+                          placeholder="60"
                           value={b.rolaCount}
                           onChange={(e) => updateBag(b.id, 'rolaCount', e.target.value)}
                         />
                       </div>
+                    </div>
 
-                      {/* Per Rola Input */}
-                      <div className="col-span-1 sm:w-20 min-w-0">
-                        <label className="block sm:hidden text-[10px] text-[var(--color-ink-soft)] mb-0.5 font-medium">
-                          Per Rola (g)
-                        </label>
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min="1"
-                            placeholder="200"
-                            className="w-full px-1.5 py-1.5 rounded border bg-white text-xs tabular-nums outline-none text-center"
-                            style={{ borderColor: 'var(--color-border)' }}
-                            value={b.perRolaGrams}
-                            title="Per rola weight in grams"
-                            onChange={(e) => updateBag(b.id, 'perRolaGrams', e.target.value)}
-                          />
-                          <span className="text-[10px] text-[var(--color-ink-soft)] hidden sm:inline">g</span>
+                    {/* Bottom Row (S/Z/Color/Norm/Big) */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex p-1 bg-gray-50 border border-gray-200/80 rounded-[12px]">
+                        <button 
+                          type="button"
+                          onClick={() => updateBag(b.id, 'twistType', 'S')}
+                          className={`w-9 h-8 rounded-[8px] text-[13px] font-bold transition-all cursor-pointer ${
+                            b.twistType === 'S' 
+                              ? 'bg-white text-gray-900 shadow-sm border border-gray-200/50' 
+                              : 'text-gray-400 hover:text-gray-600'
+                          }`}
+                        >
+                          S
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => updateBag(b.id, 'twistType', 'Z')}
+                          className={`w-9 h-8 rounded-[8px] text-[13px] font-bold transition-all cursor-pointer ${
+                            b.twistType === 'Z' 
+                              ? 'bg-white text-gray-900 shadow-sm border border-gray-200/50' 
+                              : 'text-gray-400 hover:text-gray-600'
+                          }`}
+                        >
+                          Z
+                        </button>
+                      </div>
+                      
+                      <div className="flex-1 relative">
+                        <select 
+                          className="w-full h-10 pl-3 pr-6 bg-white border border-gray-200/80 rounded-[12px] text-[13px] font-bold text-gray-700 appearance-none focus:outline-none focus:border-[#a57b3f] shadow-sm cursor-pointer"
+                          value={b.color}
+                          onChange={(e) => updateBag(b.id, 'color', e.target.value)}
+                        >
+                          <option value="">Color...</option>
+                          {COLOR_TYPES.map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                          <ChevronDown size={14} strokeWidth={3} />
                         </div>
                       </div>
-                    </div>
 
-                    {/* Desktop Results */}
-                    <div className="hidden sm:block text-right tabular-nums text-[var(--color-ink-soft)] shrink-0 w-24">
-                      Tare: <strong className="font-medium text-[var(--color-ink)]">{fmtKg(tareKg)}</strong>
+                      <div className="flex p-1 bg-gray-50 border border-gray-200/80 rounded-[12px]">
+                        <button 
+                          type="button"
+                          onClick={() => handleSizeTypeChange(b.id, 'Norm')}
+                          className={`px-2 h-8 rounded-[8px] text-[12px] font-extrabold tracking-wide uppercase transition-all cursor-pointer ${
+                            b.sizeType === 'Norm' 
+                              ? 'bg-white text-[#a57b3f] shadow-sm border border-[#a57b3f]/20' 
+                              : 'text-gray-400 hover:text-gray-600'
+                          }`}
+                        >
+                          Norm
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => handleSizeTypeChange(b.id, 'Big')}
+                          className={`px-2 h-8 rounded-[8px] text-[12px] font-extrabold tracking-wide uppercase transition-all cursor-pointer ${
+                            b.sizeType === 'Big' 
+                              ? 'bg-amber-100 text-amber-700 shadow-sm border border-amber-200/50' 
+                              : 'text-gray-400 hover:text-gray-600'
+                          }`}
+                        >
+                          Big
+                        </button>
+                      </div>
                     </div>
-
-                    <div className="hidden sm:block text-right tabular-nums text-[var(--color-ink)] shrink-0 w-28 font-semibold">
-                      Net: <strong className="text-[var(--color-brass)]">{fmtKg(netKg)}</strong>
-                    </div>
-
-                    {bags.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeBag(b.id)}
-                        className="hidden sm:block p-1 text-[var(--color-due)] hover:opacity-75 cursor-pointer shrink-0"
-                        title="Remove bag"
-                        aria-label="Remove bag"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
                   </div>
                 ))}
+                
+                {/* Add Bag Button */}
+                <button
+                  type="button"
+                  onClick={addBag}
+                  className="w-full py-4 border-[2px] border-dashed border-[#d9c7aa] rounded-[16px] text-[14px] font-bold text-[#a57b3f] flex items-center justify-center gap-2 hover:bg-[#a57b3f]/5 hover:border-[#a57b3f]/50 transition-all cursor-pointer bg-white"
+                >
+                  <Plus size={18} strokeWidth={3} /> Add Bag #{bags.length + 1}
+                </button>
               </div>
 
-              {/* Multi-Bag Action Footer */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[var(--color-border-soft)]">
-                <div className="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={addBag}
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-md text-xs font-medium text-[var(--color-brass)] bg-[var(--color-paper)] border border-[var(--color-brass)]/35 hover:border-[var(--color-brass)] hover:bg-white transition-all cursor-pointer shadow-2xs active:scale-[0.98]"
-                  >
-                    <Plus size={14} strokeWidth={2.5} /> Add Another
-                  </button>
-
-                  <div className="sm:hidden text-xs text-right">
-                    <span className="text-[var(--color-ink-soft)]">Total Net: </span>
-                    <strong className="text-sm font-bold text-[var(--color-brass)] tabular-nums">
-                      {fmtKg(totalNet)}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
-                  <span className="text-xs text-[var(--color-ink-soft)] hidden sm:inline">
-                    Total Net:{' '}
-                    <strong className="text-sm font-bold text-[var(--color-brass)]">
-                      {fmtKg(totalNet)}
-                    </strong>{' '}
-                    ({bags.length} bags · {totalRola} rola)
-                  </span>
-
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={closeForm}
-                      disabled={saving}
-                      className="flex-1 sm:flex-none py-2"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={saving}
-                      className="flex-1 sm:flex-none py-2"
-                    >
-                      <Check size={16} />{' '}
-                      {saving ? 'Saving…' : `Save (${bags.length} Bags)`}
-                    </Button>
-                  </div>
-                </div>
+              {/* Action Buttons */}
+              <div className="pt-2 flex gap-4 pb-4">
+                <button
+                  type="button"
+                  onClick={closeForm}
+                  disabled={saving}
+                  className="flex-1 py-4 rounded-[14px] font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={submit}
+                  disabled={saving}
+                  className="flex-[2] py-4 rounded-[14px] font-black text-white bg-gradient-to-b from-[#b88f4b] to-[#a57b3f] hover:from-[#c29a56] hover:to-[#b38848] shadow-[0_4px_12px_rgba(165,123,63,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer border border-[#a57b3f]/50"
+                >
+                  {saving ? 'Saving...' : `Save ${bags.length} Bag${bags.length > 1 ? 's' : ''} • ${fmtKg(totalFormNet)}`}
+                </button>
               </div>
             </div>
-          )}
-        </form>
+          </div>
+        </div>
       )}
-
-      {/* ── Table View (Exact previous clean design) ──────────────── */}
-      {filteredReceipts.length === 0 && !loading ? (
+      {/* --- Grouped Cards List --- */}
+      {groupedReceipts.length === 0 && !loading ? (
         <EmptyState text={`No receiving entries found for ${formattedMonth}.`} />
       ) : (
-        <div
-          className="overflow-x-auto rounded-lg bg-white shadow-xs"
-          style={{ border: '1px solid var(--color-border)' }}
-        >
-          <table className="w-full text-sm border-collapse min-w-[720px]">
-            <thead>
-              <tr style={{ background: 'var(--color-border-soft)' }}>
-                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
-                  Date
-                </th>
-                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
-                  Party
-                </th>
-                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
-                  Color
-                </th>
-                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
-                  Gross (kg)
-                </th>
-                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
-                  Tare (kg)
-                </th>
-                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
-                  Net Wt (kg)
-                </th>
-                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
-                  Challan #
-                </th>
-                <th className="text-left px-4 py-3 font-normal text-xs sm:text-sm text-[var(--color-ink-soft)]">
-                  Rola
-                </th>
-                <th className="text-right px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredReceipts.map((r) => (
-                <tr
-                  key={r.id}
-                  className="hover:bg-[#FAF8F3] transition-colors"
-                  style={{ borderTop: '1px solid var(--color-border-soft)' }}
+        <div className="mt-6 space-y-4 pb-28 animate-in fade-in duration-500">
+          {groupedReceipts.map((group) => {
+            const isExpanded = group.receipts.length === 1 || expandedChallans.has(group.id)
+            const multiRow = group.receipts.length > 1
+            
+            return (
+              <div 
+                key={group.id} 
+                className={`rounded-[24px] overflow-hidden bg-white shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100 transition-all ${isExpanded ? 'shadow-[0_8px_30px_-8px_rgba(0,0,0,0.08)]' : ''}`}
+              >
+                {/* Card Header */}
+                <div 
+                  className={`px-5 py-4 ${multiRow ? 'cursor-pointer hover:bg-gray-50/50 transition-colors select-none' : ''}`}
+                  onClick={() => multiRow && toggleChallan(group.id)}
                 >
-                  <td className="px-4 py-3.5 whitespace-nowrap text-sm text-[var(--color-ink)]">
-                    {fmtDate(r.date)}
-                  </td>
-                  <td className="px-4 py-3.5 font-bold whitespace-nowrap text-sm text-[var(--color-ink)]">
-                    {r.party?.name ?? '—'}
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap text-sm text-[var(--color-ink)]">
-                    {r.color || '—'}
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap text-sm tabular-nums text-[var(--color-ink)]">
-                    {fmtKg(r.gross_weight)}
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap text-sm tabular-nums text-[var(--color-ink)]">
-                    {fmtKg(r.tare_weight)}
-                  </td>
-                  <td
-                    className="px-4 py-3.5 whitespace-nowrap text-sm tabular-nums font-bold"
-                    style={{ color: 'var(--color-brass)' }}
-                  >
-                    {fmtKg(r.net_weight)}
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap text-sm text-[var(--color-ink)]">
-                    {r.challan_no || '—'}
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap text-sm tabular-nums text-[var(--color-ink)]">
-                    {r.rola_count || 0}
-                  </td>
-                  <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                    <div className="inline-flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => startEdit(r)}
-                        className="p-1 text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] cursor-pointer transition-colors"
-                        title="Edit receipt"
-                        aria-label="Edit receipt"
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      {deleting === r.id ? (
-                        <ConfirmDelete
-                          onConfirm={() => handleDelete(r.id)}
-                          onCancel={() => setDeleting(null)}
-                        />
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <div className="flex items-center gap-3 min-w-0 flex-1 flex-wrap">
+                      {group.challan_no !== '—' ? (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-black tracking-wide bg-[#a57b3f] text-white shadow-sm shrink-0">
+                          Ch. #{group.challan_no}
+                        </span>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => setDeleting(r.id)}
-                          className="p-1 text-[var(--color-due)] hover:opacity-75 cursor-pointer transition-colors"
-                          title="Delete receipt"
-                          aria-label="Delete receipt"
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-black tracking-wide bg-gray-100 text-gray-500 shrink-0">
+                          No Ch.
+                        </span>
                       )}
+                      <h3 className="font-extrabold text-[16px] text-gray-900 truncate tracking-tight">{group.party_name}</h3>
+                      <span className="text-[12px] text-gray-400 font-medium shrink-0 ml-auto">{fmtDate(group.date)}</span>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    
+                    {multiRow && (
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-50 text-gray-400 shrink-0">
+                        <ChevronDown 
+                          size={18} 
+                          strokeWidth={2.5} 
+                          className={`transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[#a57b3f]' : ''}`} 
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card Body Grid */}
+                  <div className="grid grid-cols-4 gap-3">
+                    <div>
+                      <div className="text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Gross</div>
+                      <div className="text-[15px] font-black text-gray-900 tabular-nums tracking-tight">{fmtKg(group.gross)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-extrabold text-red-400/80 uppercase tracking-widest mb-1">Tare</div>
+                      <div className="text-[15px] font-black text-red-500 tabular-nums tracking-tight">{group.tare > 0 ? '-' : ''}{fmtKg(group.tare)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Rola</div>
+                      <div className="text-[15px] font-black text-gray-700 tabular-nums tracking-tight flex items-center gap-1.5">
+                        {group.rola} <span className="text-[11px] font-bold text-gray-400">pcs</span>
+                        {group.rola > 0 && group.hasBig && <span className="bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded-md font-black uppercase tracking-wider">Big</span>}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[9px] font-extrabold text-[#a57b3f]/70 uppercase tracking-widest mb-1">Net Kasab</div>
+                      <div className="text-[17px] font-black text-[#a57b3f] tabular-nums tracking-tight">{fmtKg(group.net)}</div>
+                    </div>
+                  </div>
+                  
+                  {group.bagsCount > 0 && (
+                    <div className="mt-3 inline-flex items-center bg-gray-50 border border-gray-200 text-gray-500 text-[11px] font-bold px-2.5 py-0.5 rounded-lg shadow-sm">
+                      {group.bagsCount} Bag{group.bagsCount > 1 ? 's' : ''}
+                    </div>
+                  )}
+                </div>
+
+                {/* Expanded Individual Rows */}
+                {isExpanded && (
+                  <div className="divide-y divide-gray-100/80 bg-white border-t border-gray-100/80">
+                    {group.receipts.map((r, idx) => (
+                      <div
+                        key={r.id}
+                        className={`px-5 py-4 hover:bg-amber-50/30 transition-colors group/row ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-md shadow-sm uppercase tracking-wider bg-white text-gray-600 border border-gray-200">
+                              Bag #{idx + 1}
+                            </span>
+                            {r.color && (
+                              <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white text-gray-700 border border-gray-200 shadow-sm">
+                                {r.color}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); startEdit(r); }}
+                              className="p-2 rounded-xl flex items-center justify-center hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+                              title="Edit Bag"
+                            >
+                              <Pencil size={16} strokeWidth={2.5} />
+                            </button>
+                            
+                            {deleting === r.id ? (
+                              <div className="flex items-center gap-1.5 text-xs bg-red-50 px-2 py-1 rounded-xl border border-red-100">
+                                <span className="text-red-600 font-bold px-1">Sure?</span>
+                                <button onClick={(e) => { e.stopPropagation(); handleDelete(r.id); }} className="px-2.5 py-1.5 bg-red-500 text-white rounded-lg font-bold shadow-sm hover:bg-red-600 transition-colors">Yes</button>
+                                <button onClick={(e) => { e.stopPropagation(); setDeleting(null); }} className="px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-600 font-bold hover:bg-gray-50 transition-colors">No</button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setDeleting(r.id); }}
+                                className="p-2 rounded-xl flex items-center justify-center hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors cursor-pointer"
+                                title="Delete Bag"
+                              >
+                                <Trash2 size={16} strokeWidth={2.5} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mt-3 text-[14px]">
+                          <div className="flex items-baseline gap-2 text-gray-500 font-medium">
+                            <span className="font-black text-gray-900 tabular-nums tracking-tight">{fmtKg(r.gross_weight)}</span>
+                            <span className="text-[11px] font-bold uppercase tracking-widest">Gross</span>
+                            <span className="text-gray-300">·</span>
+                            <span className="font-black text-red-500 tabular-nums tracking-tight">-{fmtKg(r.tare_weight)}</span>
+                            <span className="text-[11px] font-bold uppercase tracking-widest text-red-400/80">Tare</span>
+                          </div>
+                          <div className="text-[17px] font-black text-[#a57b3f] tabular-nums tracking-tight mt-1 sm:mt-0 text-right">
+                            {fmtKg(r.net_weight)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
+      )}
+
+      {/* Floating Action Button (+ New Receipt) */}
+      {!isOpen && (
+        <button
+          onClick={startAdd}
+          className="fixed bottom-[80px] right-5 sm:right-8 bg-gradient-to-b from-[#b58c50] to-[#997036] hover:from-[#a57b3f] hover:to-[#8a632b] text-white px-6 py-4 rounded-full shadow-[0_8px_30px_-8px_rgba(165,123,63,0.5)] hover:shadow-[0_12px_40px_-8px_rgba(165,123,63,0.6)] flex items-center gap-2.5 font-black transition-all active:scale-95 z-40 border border-[#c49a5d]/50 hover:-translate-y-1"
+        >
+          <Plus size={22} strokeWidth={3} /> <span className="tracking-wide">New Receipt</span>
+        </button>
       )}
     </div>
   )

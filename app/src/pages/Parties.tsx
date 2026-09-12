@@ -1,28 +1,40 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Phone, MapPin, Check } from 'lucide-react'
 import {
-  fetchParties,
-  fetchReceipts,
-  fetchDispatches,
-  fetchPayments,
-  fetchRolaReturns,
-  fetchGapchaSales,
-  fetchReconciliations,
-  insertParty,
-  updateParty,
-  deleteParty,
-  computePartyStats,
-} from '../lib/queries'
-import type { Party, PartyStats } from '../types'
-import { fmtMoney, fmtKg } from '../types'
-import {
-  SectionHeader,
-  Button,
-  Field,
-  TextInput,
-  EmptyState,
-  ConfirmDelete,
-} from '../components/ui/UIComponents'
+  Plus,
+  Pencil,
+  Trash2,
+  Phone,
+  MapPin,
+  Check,
+  MessageSquare,
+  BookOpen,
+  X,
+} from 'lucide-react'
+import { fetchParties, insertParty, updateParty, deleteParty } from '../lib/api/parties'
+import { fetchReceipts } from '../lib/api/receipts'
+import { fetchDispatches } from '../lib/api/dispatch'
+import { fetchPayments } from '../lib/api/payments'
+import { fetchRolaReturns } from '../lib/api/rola'
+import { computePartyStats } from '../lib/api/stats'
+
+
+import type {
+  Party,
+  PartyStats,
+  ReceiptWithParty,
+  DispatchWithParty,
+  PaymentWithParty,
+  RolaReturnWithParty,
+} from '../types'
+import { fmtMoney } from '../types'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { Button } from '../components/ui/Button'
+import { Field } from '../components/ui/Field'
+import { TextInput } from '../components/ui/TextInput'
+import { EmptyState } from '../components/ui/EmptyState'
+import { ConfirmDelete } from '../components/ui/ConfirmDelete'
+import PartyKhataModal from '../components/ui/PartyKhataModal'
+import { sharePartyKhata } from '../lib/whatsapp'
 
 interface PartyFormState {
   id: string | null
@@ -46,8 +58,17 @@ const EMPTY_FORM: PartyFormState = {
 
 export default function Parties() {
   const [parties, setParties] = useState<Party[]>([])
+  const [receipts, setReceipts] = useState<ReceiptWithParty[]>([])
+  const [dispatches, setDispatches] = useState<DispatchWithParty[]>([])
+  const [payments, setPayments] = useState<PaymentWithParty[]>([])
+  const [rolaReturns, setRolaReturns] = useState<RolaReturnWithParty[]>([])
   const [stats, setStats] = useState<Record<string, PartyStats>>({})
   const [loading, setLoading] = useState(true)
+
+  // Khata Modal
+  const [activeKhataParty, setActiveKhataParty] = useState<Party | null>(null)
+
+  // Form State
   const [form, setForm] = useState<PartyFormState | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -57,26 +78,27 @@ export default function Parties() {
     setLoading(true)
     setErrorMsg(null)
     try {
-      const [partiesData, receiptsData, rolaData, dispatchesData, paymentsData, gapchaData, reconsData] =
+      const [partiesData, receiptsData, rolaData, dispatchesData, paymentsData] =
         await Promise.all([
           fetchParties(),
           fetchReceipts(),
           fetchRolaReturns(),
           fetchDispatches(),
           fetchPayments(),
-          fetchGapchaSales(),
-          fetchReconciliations(),
         ])
 
       setParties(partiesData)
+      setReceipts(receiptsData)
+      setDispatches(dispatchesData)
+      setPayments(paymentsData)
+      setRolaReturns(rolaData)
+
       const computed = computePartyStats(
         partiesData,
         receiptsData,
         rolaData,
         dispatchesData,
-        paymentsData,
-        gapchaData,
-        reconsData
+        paymentsData
       )
       setStats(computed)
     } catch (err) {
@@ -173,272 +195,306 @@ export default function Parties() {
     <div>
       <SectionHeader
         title="Parties"
-        subtitle="Customers who send Kasab for job-work"
-        action={
-          !form && (
-            <Button onClick={startAdd}>
-              <Plus size={16} /> Add Party
-            </Button>
-          )
-        }
+        subtitle="Party management, material standing, and statement overview"
       />
 
       {errorMsg && (
         <div
-          className="rounded-lg p-3 mb-4 text-xs font-medium flex items-center justify-between"
+          className="rounded-lg p-3 mb-4 text-xs font-medium flex items-center justify-between shadow-xs"
           style={{ background: 'var(--color-due-bg)', color: 'var(--color-due)' }}
         >
           <span>{errorMsg}</span>
           <button
             onClick={() => setErrorMsg(null)}
-            className="underline cursor-pointer"
+            className="underline cursor-pointer font-semibold"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* ── Add / Edit Form ──────────────────────────────────────── */}
-      {form && (
-        <form
-          onSubmit={submit}
-          className="mb-5 p-4 rounded-lg grid grid-cols-1 sm:grid-cols-2 gap-3"
-          style={{
-            background: 'var(--color-card)',
-            border: '1px solid var(--color-border)',
-          }}
-        >
-          <Field label="Party Name *">
-            <TextInput
-              required
-              autoFocus
-              placeholder="e.g. Ramesh Jariwala"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </Field>
-          <Field label="Phone">
-            <TextInput
-              type="tel"
-              placeholder="e.g. 98250 12345"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            />
-          </Field>
-          <Field label="Address">
-            <TextInput
-              placeholder="e.g. Katargam, Surat"
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-            />
-          </Field>
-          <Field label="Notes">
-            <TextInput
-              placeholder="e.g. Regular 8-cord party"
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            />
-          </Field>
-          <Field label="Default Rola Weight (Receiving, grams)">
-            <TextInput
-              type="text"
-              inputMode="numeric"
-              placeholder="e.g. 200 (Leave empty for global default)"
-              value={form.rolaWeight}
-              onChange={(e) =>
-                setForm({ ...form, rolaWeight: e.target.value.replace(/[^0-9]/g, '') })
-              }
-            />
-          </Field>
-          <Field label="Default Bungri Weight (Dispatch, grams)">
-            <TextInput
-              type="text"
-              inputMode="numeric"
-              placeholder="e.g. 70 (Leave empty for global default)"
-              value={form.bungariWeight}
-              onChange={(e) =>
-                setForm({ ...form, bungariWeight: e.target.value.replace(/[^0-9]/g, '') })
-              }
-            />
-          </Field>
-          <div className="flex gap-2 sm:col-span-2 pt-1">
-            <Button type="submit" disabled={saving}>
-              <Check size={16} /> {saving ? 'Saving…' : form.id ? 'Update Party' : 'Save Party'}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setForm(null)}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-          </div>
-        </form>
-      )}
-
       {/* ── Parties Grid ─────────────────────────────────────────── */}
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="rounded-lg p-4 h-36 animate-pulse"
-              style={{
-                background: 'var(--color-card)',
-                border: '1px solid var(--color-border)',
-              }}
-            />
-          ))}
-        </div>
-      ) : parties.length === 0 ? (
-        <EmptyState text="No parties yet. Add the first party to start tracking their work." />
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {parties.map((p) => {
-            const s = stats[p.id] || { rolaPending: 0, balance: 0 }
-            return (
-              <div
-                key={p.id}
-                className="rounded-lg p-4 flex flex-col justify-between"
-                style={{
-                  background: 'var(--color-card)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <h3
-                      className="font-semibold text-base leading-snug"
-                      style={{
-                        fontFamily: 'var(--font-display)',
-                        color: 'var(--color-ink)',
-                      }}
-                    >
-                      {p.name}
-                    </h3>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => edit(p)}
-                        className="p-1 rounded cursor-pointer"
-                        style={{ color: 'var(--color-ink-soft)' }}
-                        title="Edit party"
-                        aria-label="Edit party"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      {deleting === p.id ? (
-                        <ConfirmDelete
-                          onConfirm={() => handleDelete(p.id)}
-                          onCancel={() => setDeleting(null)}
-                        />
-                      ) : (
+      {!form && (
+        <div className="pb-28 pt-2">
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="rounded-[24px] p-5 h-48 animate-pulse bg-white border border-gray-100 shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)]"
+                />
+              ))}
+            </div>
+          ) : parties.length === 0 ? (
+            <EmptyState text="No parties yet. Add the first party to start tracking their work." />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {parties.map((p) => {
+                const s = stats[p.id] || { rolaPending: 0, balance: 0 }
+                return (
+                  <div
+                    key={p.id}
+                    className="rounded-[24px] p-5 bg-white border border-gray-100/80 shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.08)] flex flex-col justify-between transition-all group relative overflow-hidden"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <h3 className="font-extrabold text-[18px] leading-tight text-gray-900 tracking-tight">
+                          {p.name}
+                        </h3>
+                        <div className="flex items-center gap-1 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => edit(p)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                            title="Edit party"
+                            aria-label="Edit party"
+                          >
+                            <Pencil size={16} strokeWidth={2.5} />
+                          </button>
+                          {deleting === p.id ? (
+                            <ConfirmDelete
+                              onConfirm={() => handleDelete(p.id)}
+                              onCancel={() => setDeleting(null)}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setDeleting(p.id)}
+                              className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                              title="Delete party"
+                              aria-label="Delete party"
+                            >
+                              <Trash2 size={16} strokeWidth={2.5} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {p.phone && (
+                        <p className="text-[13px] text-gray-500 flex items-center gap-1.5 mb-1.5 font-bold">
+                          <Phone size={14} className="text-gray-400 shrink-0" />
+                          <span>{p.phone}</span>
+                        </p>
+                      )}
+
+                      {p.address && (
+                        <p className="text-[13px] text-gray-500 flex items-start gap-1.5 leading-snug">
+                          <MapPin size={14} className="text-gray-400 shrink-0 mt-0.5" />
+                          <span>{p.address}</span>
+                        </p>
+                      )}
+
+                      {p.notes && (
+                        <p className="text-[12px] text-gray-400 mt-2 italic font-medium">
+                          "{p.notes}"
+                        </p>
+                      )}
+
+                      {/* Weights badge - Only Rola */}
+                      <div className="flex items-center gap-1.5 flex-wrap mt-3">
+                        <span className="text-[10px] font-extrabold tracking-widest uppercase px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">
+                          Rola: {p.default_rola_weight_g ? `${p.default_rola_weight_g}g` : '200g'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      {/* Balance / Rola stats */}
+                      <div className="grid grid-cols-2 gap-4 mt-5 pt-4 border-t border-gray-100">
+                        <div>
+                          <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Pending Rola</div>
+                          <div
+                            className={`font-black tabular-nums text-[16px] leading-none ${
+                              s.rolaPending > 0 ? 'text-red-500' : 'text-gray-900'
+                            }`}
+                          >
+                            {s.rolaPending} <span className="text-[12px] font-bold text-gray-400 tracking-normal">pcs</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Balance Due</div>
+                          <div
+                            className={`font-black tabular-nums text-[18px] leading-none tracking-tight ${
+                              s.balance > 0
+                                ? 'text-red-500'
+                                : s.balance < 0
+                                ? 'text-emerald-500'
+                                : 'text-gray-900'
+                            }`}
+                          >
+                            {fmtMoney(s.balance)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ── 📖 Party Khata / Passbook & WhatsApp Action Bar ─ */}
+                      <div className="flex items-center gap-3 mt-5">
                         <button
                           type="button"
-                          onClick={() => setDeleting(p.id)}
-                          className="p-1 rounded cursor-pointer"
-                          style={{ color: 'var(--color-due)' }}
-                          title="Delete party"
-                          aria-label="Delete party"
+                          onClick={() => setActiveKhataParty(p)}
+                          className="flex-1 py-3 px-4 rounded-xl bg-[#a57b3f]/10 hover:bg-[#a57b3f]/20 text-[#a57b3f] text-[13px] font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
                         >
-                          <Trash2 size={14} />
+                          <BookOpen size={16} strokeWidth={2.5} /> Statement / Khata
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => sharePartyKhata(p, s)}
+                          className="w-12 h-12 rounded-xl text-white bg-gradient-to-b from-[#25D366] to-[#128C7E] hover:opacity-90 active:scale-95 transition-all cursor-pointer shrink-0 shadow-[0_4px_12px_rgba(37,211,102,0.3)] flex items-center justify-center"
+                          title="Share statement on WhatsApp"
+                          aria-label="Share statement on WhatsApp"
+                        >
+                          <MessageSquare size={20} strokeWidth={2.5} />
+                        </button>
+                      </div>
                     </div>
                   </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
-                  {p.phone && (
-                    <p
-                      className="text-xs flex items-center gap-1 mt-1.5"
-                      style={{ color: 'var(--color-ink-soft)' }}
-                    >
-                      <Phone size={11} className="shrink-0" />
-                      <span>{p.phone}</span>
-                    </p>
-                  )}
+      {/* ── Add / Edit Form Modal ──────────────────────────────────────── */}
+      {form && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-md sm:items-center sm:justify-center p-0 sm:p-4 transition-all">
+          <div className="bg-[#fcfcfb] w-full sm:w-[480px] rounded-t-[24px] sm:rounded-3xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:slide-in-from-bottom-6 duration-400 ease-out max-h-[90dvh] overflow-y-auto">
+            <div className="flex justify-center pt-3 pb-1 bg-white shrink-0 sticky top-0 z-10">
+              <div className="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+            </div>
+            
+            <div className="px-6 pb-4 pt-2 bg-white flex justify-between items-start shrink-0 sticky top-[20px] z-10 border-b border-gray-100">
+              <div>
+                <p className="text-[10px] font-extrabold tracking-widest text-[#a57b3f]/70 uppercase mb-1.5">
+                  {form.id ? 'EDIT PARTY' : 'NEW PARTY'}
+                </p>
+                <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                  Party Details
+                </h2>
+              </div>
+              <button 
+                onClick={() => setForm(null)}
+                className="p-2 -mr-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 transition-colors cursor-pointer"
+              >
+                <X size={20} strokeWidth={2.5} />
+              </button>
+            </div>
 
-                  {p.address && (
-                    <p
-                      className="text-xs flex items-center gap-1 mt-0.5"
-                      style={{ color: 'var(--color-ink-soft)' }}
-                    >
-                      <MapPin size={11} className="shrink-0" />
-                      <span>{p.address}</span>
-                    </p>
-                  )}
-
-                  {p.notes && (
-                    <p
-                      className="text-xs mt-1.5 italic"
-                      style={{ color: 'var(--color-ink-soft)' }}
-                    >
-                      {p.notes}
-                    </p>
-                  )}
-
-                  {/* Weights badge */}
-                  <div className="flex items-center gap-1.5 flex-wrap mt-2">
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-[var(--color-paper)] border border-[var(--color-border)] text-[var(--color-ink-soft)]">
-                      Rola: {p.default_rola_weight_g ? `${p.default_rola_weight_g}g` : '200g (default)'}
-                    </span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-[var(--color-paper)] border border-[var(--color-border)] text-[var(--color-ink-soft)]">
-                      Bungri: {p.default_bungari_weight_g ? `${p.default_bungari_weight_g}g` : '70g (default)'}
-                    </span>
-                  </div>
+            <form onSubmit={submit} className="p-6 bg-[#fcfcfb] space-y-5">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Party Name *</label>
+                  <input
+                    required
+                    autoFocus
+                    placeholder="e.g. Ramesh Jariwala"
+                    className="w-full h-[48px] px-4 bg-white border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  />
                 </div>
 
-                <div
-                  className="grid grid-cols-3 gap-2 mt-3 pt-3 text-xs"
-                  style={{ borderTop: '1px solid var(--color-border-soft)' }}
-                >
-                  <div>
-                    <div style={{ color: 'var(--color-ink-soft)' }}>Rola pending</div>
-                    <div
-                      className="font-semibold tabular-nums mt-0.5"
-                      style={{
-                        color: s.rolaPending > 0 ? 'var(--color-due)' : 'var(--color-ink)',
-                      }}
-                    >
-                      {s.rolaPending}
-                    </div>
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. 98250 12345"
+                    className="w-full h-[48px] px-4 bg-white border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Address</label>
+                  <input
+                    placeholder="e.g. Katargam, Surat"
+                    className="w-full h-[48px] px-4 bg-white border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                    value={form.address}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Notes</label>
+                  <input
+                    placeholder="e.g. Regular 8-cord party"
+                    className="w-full h-[48px] px-4 bg-white border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  />
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Def. Rola (g)</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="200"
+                      className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm placeholder:text-gray-300"
+                      value={form.rolaWeight}
+                      onChange={(e) => setForm({ ...form, rolaWeight: e.target.value.replace(/[^0-9]/g, '') })}
+                    />
                   </div>
-                  <div>
-                    <div style={{ color: 'var(--color-ink-soft)' }}>Balance due</div>
-                    <div
-                      className="font-semibold tabular-nums mt-0.5"
-                      style={{
-                        color:
-                          s.balance > 0
-                            ? 'var(--color-due)'
-                            : s.balance < 0
-                            ? 'var(--color-positive)'
-                            : 'var(--color-ink)',
-                      }}
-                    >
-                      {fmtMoney(s.balance)}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ color: 'var(--color-ink-soft)' }}>Gapcha Avail</div>
-                    <div
-                      className="font-semibold tabular-nums mt-0.5"
-                      style={{
-                        color:
-                          (s.remainingGapcha || 0) > 0
-                            ? 'var(--color-positive)'
-                            : 'var(--color-ink-soft)',
-                      }}
-                    >
-                      {fmtKg(s.remainingGapcha || 0)}
-                    </div>
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Def. Bungri (g)</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="70"
+                      className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm placeholder:text-gray-300"
+                      value={form.bungariWeight}
+                      onChange={(e) => setForm({ ...form, bungariWeight: e.target.value.replace(/[^0-9]/g, '') })}
+                    />
                   </div>
                 </div>
               </div>
-            )
-          })}
+
+              <div className="pt-4 flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => setForm(null)}
+                  disabled={saving}
+                  className="flex-1 py-4 rounded-[14px] font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-[2] py-4 rounded-[14px] font-black text-white bg-gradient-to-b from-[#b88f4b] to-[#a57b3f] hover:from-[#c29a56] hover:to-[#b38848] shadow-[0_4px_12px_rgba(165,123,63,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer border border-[#a57b3f]/50"
+                >
+                  {saving ? 'Saving...' : form.id ? 'Update Party' : 'Save Party'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
+
+      {/* Floating Action Button */}
+      {!form && (
+        <button
+          onClick={startAdd}
+          className="fixed bottom-[80px] right-5 sm:right-8 bg-gradient-to-b from-[#b88f4b] to-[#a57b3f] hover:from-[#c29a56] hover:to-[#b38848] text-white px-6 py-4 rounded-full shadow-[0_8px_30px_-8px_rgba(165,123,63,0.5)] hover:shadow-[0_12px_40px_-8px_rgba(165,123,63,0.6)] flex items-center gap-2.5 font-black transition-all active:scale-95 z-40 border border-[#a57b3f]/50 hover:-translate-y-1"
+        >
+          <Plus size={22} strokeWidth={3} /> <span className="tracking-wide">Add Party</span>
+        </button>
+      )}
+
+      {/* ── Party Khata / Passbook Modal ──────────────────────────── */}
+      <PartyKhataModal
+        isOpen={Boolean(activeKhataParty)}
+        onClose={() => setActiveKhataParty(null)}
+        party={activeKhataParty}
+        stats={activeKhataParty ? stats[activeKhataParty.id] || null : null}
+        receipts={receipts}
+        dispatches={dispatches}
+        payments={payments}
+        rolaReturns={rolaReturns}
+      />
     </div>
   )
 }
+

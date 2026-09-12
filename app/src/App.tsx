@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { MonthProvider } from './context/MonthContext'
-import Layout from './components/Layout'
+import Layout from './components/layout/Layout'
 import Dashboard  from './pages/Dashboard'
 import Parties    from './pages/Parties'
 import Receiving  from './pages/Receiving'

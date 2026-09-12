@@ -1,24 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Check } from 'lucide-react'
-import {
-  fetchExpenses,
-  insertExpense,
-  updateExpense,
-  deleteExpense,
-  type ExpensePayload,
-} from '../lib/queries'
+import { Plus, Pencil, Trash2, Check, X } from 'lucide-react'
+import { fetchExpenses, insertExpense, updateExpense, deleteExpense, type ExpensePayload } from '../lib/api/expenses'
+
+
 import type { Expense } from '../types'
 import { EXPENSE_CATEGORIES, fmtDate, fmtMoney, todayStr } from '../types'
-import {
-  SectionHeader,
-  KpiCard,
-  Button,
-  Field,
-  TextInput,
-  Select,
-  Table,
-  ConfirmDelete,
-} from '../components/ui/UIComponents'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { KpiCard } from '../components/ui/KpiCard'
+import { Button } from '../components/ui/Button'
+import { Field } from '../components/ui/Field'
+import { TextInput } from '../components/ui/TextInput'
+import { Select } from '../components/ui/Select'
+import { Table } from '../components/ui/Table'
+import { ConfirmDelete } from '../components/ui/ConfirmDelete'
+import { EmptyState } from '../components/ui/EmptyState'
 import { useMonth } from '../context/MonthContext'
 
 interface ExpenseFormState {
@@ -141,176 +136,216 @@ export default function Expenses() {
     <div className="space-y-5">
       <SectionHeader
         title="Expenses"
-        subtitle="Rent, transport, machine maintenance, consumables"
-        action={
-          !form && (
-            <Button onClick={startAdd}>
-              <Plus size={16} /> Add Expense
-            </Button>
-          )
-        }
+        subtitle="Operational costs — rent, repairs, transport & utilities"
       />
 
       {/* ── Month Summary KPIs ────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <KpiCard
-          label="Total Expenses"
-          value={fmtMoney(monthExpenseTotal)}
-          sub={formattedMonth}
-          tone="due"
-          loading={loading}
-        />
-        <KpiCard
-          label="Expense Count"
-          value={filteredExpenses.length}
-          sub="entries recorded"
-          loading={loading}
-        />
-      </div>
+      {!form && (
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="rounded-[20px] p-4.5 bg-red-50/50 shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-red-100/50 transition-all">
+            <div className="text-[9px] font-extrabold uppercase tracking-widest text-red-600/70 mb-2">Total Expenses</div>
+            <div className="text-[22px] font-black tabular-nums leading-none tracking-tight text-red-700 mb-1.5">
+              {fmtMoney(monthExpenseTotal)}
+            </div>
+            <div className="text-[10px] font-bold text-red-600/50">{formattedMonth}</div>
+          </div>
+          <div className="rounded-[20px] p-4.5 bg-white shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100/80 transition-all">
+            <div className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-2">Expense Count</div>
+            <div className="text-[22px] font-black tabular-nums leading-none tracking-tight text-gray-900 mb-1.5">
+              {filteredExpenses.length} <span className="text-[14px] text-gray-400 font-bold tracking-normal">entries</span>
+            </div>
+            <div className="text-[10px] font-medium text-gray-400">{formattedMonth}</div>
+          </div>
+        </div>
+      )}
 
       {errorMsg && (
         <div
-          className="rounded-lg p-3 mb-4 text-xs font-medium flex items-center justify-between"
+          className="rounded-lg p-3 mb-4 text-xs font-medium flex items-center justify-between shadow-xs"
           style={{ background: 'var(--color-due-bg)', color: 'var(--color-due)' }}
         >
           <span>{errorMsg}</span>
           <button
             onClick={() => setErrorMsg(null)}
-            className="underline cursor-pointer"
+            className="underline cursor-pointer font-semibold"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* ── Add / Edit Form ──────────────────────────────────────── */}
-      {form && (
-        <form
-          onSubmit={submit}
-          className="mb-5 p-4 rounded-lg grid grid-cols-2 sm:grid-cols-4 gap-3"
-          style={{
-            background: 'var(--color-card)',
-            border: '1px solid var(--color-border)',
-          }}
-        >
-          <Field label="Date">
-            <TextInput
-              type="date"
-              required
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
-            />
-          </Field>
-
-          <Field label="Category">
-            <Select
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-            >
-              {EXPENSE_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+      {/* ── Expenses List ───────────────────────────────────────────── */}
+      {!form && (
+        <div className="pb-28">
+          <h2 className="text-xs font-extrabold uppercase tracking-widest text-gray-400 mb-4 pl-1">Recent Expenses</h2>
+          {loading ? (
+            <div className="rounded-[20px] p-8 text-center text-sm border border-gray-100 bg-white shadow-sm text-gray-400">
+              Loading expenses…
+            </div>
+          ) : filteredExpenses.length === 0 ? (
+            <EmptyState text={`No expenses logged for ${formattedMonth}.`} />
+          ) : (
+            <div className="space-y-3">
+              {filteredExpenses.map((x) => (
+                <div
+                  key={x.id}
+                  className="rounded-[20px] p-4 bg-white border border-gray-100/80 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between group transition-all hover:shadow-[0_4px_15px_rgba(0,0,0,0.04)]"
+                >
+                  <div className="flex flex-col">
+                    <span className="font-bold text-[15px] text-gray-900 tracking-tight">{x.category}</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[11px] font-bold text-gray-400">{fmtDate(x.date)}</span>
+                      {x.note && (
+                        <>
+                          <span className="text-gray-300">·</span>
+                          <span className="text-[11px] font-medium text-gray-500">{x.note}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-[17px] font-black tabular-nums text-red-600 tracking-tight">
+                      -{fmtMoney(x.amount)}
+                    </span>
+                    <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => edit(x)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      {deleting === x.id ? (
+                        <ConfirmDelete
+                          onConfirm={() => handleDelete(x.id)}
+                          onCancel={() => setDeleting(null)}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setDeleting(x.id)}
+                          className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               ))}
-            </Select>
-          </Field>
-
-          <Field label="Amount (₹) *">
-            <TextInput
-              required
-              type="number"
-              step="0.01"
-              placeholder="e.g. 1500"
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            />
-          </Field>
-
-          <Field label="Note">
-            <TextInput
-              placeholder="e.g. Monthly shop rent"
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-            />
-          </Field>
-
-          <div className="flex gap-2 items-end pt-1 col-span-2 sm:col-span-1">
-            <Button type="submit" disabled={saving}>
-              <Check size={16} /> {saving ? 'Saving…' : 'Save'}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setForm(null)}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-          </div>
-        </form>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* ── Table View / Loading ─────────────────────────────────── */}
-      {loading ? (
-        <div
-          className="rounded-lg p-8 text-center text-sm"
-          style={{ border: '1px solid var(--color-border)', color: 'var(--color-ink-soft)', background: 'var(--color-card)' }}
-        >
-          Loading expenses…
-        </div>
-      ) : (
-        <Table
-          columns={['Date', 'Category', 'Amount', 'Note', '']}
-          rows={filteredExpenses}
-          emptyText={`No expenses found for ${formattedMonth}.`}
-        renderRow={(x) => (
-          <tr
-            key={x.id}
-            style={{ borderTop: '1px solid var(--color-border-soft)' }}
-          >
-            <td className="px-3 py-2 whitespace-nowrap">{fmtDate(x.date)}</td>
-            <td className="px-3 py-2">{x.category}</td>
-            <td
-              className="px-3 py-2 tabular-nums font-semibold"
-              style={{ color: 'var(--color-due)' }}
-            >
-              {fmtMoney(x.amount)}
-            </td>
-            <td className="px-3 py-2" style={{ color: 'var(--color-ink-soft)' }}>
-              {x.note || '—'}
-            </td>
-            <td className="px-3 py-2 text-right whitespace-nowrap">
-              <button
-                type="button"
-                onClick={() => edit(x)}
-                className="p-1 cursor-pointer"
-                style={{ color: 'var(--color-ink-soft)' }}
-                title="Edit expense"
-                aria-label="Edit expense"
+      {/* ── Add / Edit Form Modal ──────────────────────────────────────── */}
+      {form && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-md sm:items-center sm:justify-center p-0 sm:p-4 transition-all">
+          <div className="bg-[#fcfcfb] w-full sm:w-[480px] rounded-t-[24px] sm:rounded-3xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:slide-in-from-bottom-6 duration-400 ease-out">
+            <div className="flex justify-center pt-3 pb-1 bg-white">
+              <div className="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+            </div>
+            
+            <div className="px-6 pb-4 pt-2 bg-white flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-extrabold tracking-widest text-red-600/70 uppercase mb-1.5">
+                  {form.id ? 'EDIT EXPENSE' : 'NEW EXPENSE'}
+                </p>
+                <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                  Log Operating Cost
+                </h2>
+              </div>
+              <button 
+                onClick={() => setForm(null)}
+                className="p-2 -mr-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 transition-colors cursor-pointer"
               >
-                <Pencil size={14} />
+                <X size={20} strokeWidth={2.5} />
               </button>
-              {deleting === x.id ? (
-                <ConfirmDelete
-                  onConfirm={() => handleDelete(x.id)}
-                  onCancel={() => setDeleting(null)}
-                />
-              ) : (
+            </div>
+
+            <form onSubmit={submit} className="p-6 bg-[#fcfcfb] space-y-5">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Category *</label>
+                  <select
+                    required
+                    value={form.category}
+                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all appearance-none cursor-pointer shadow-sm"
+                  >
+                    {EXPENSE_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Amount (₹) *</label>
+                    <input
+                      required
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 1500"
+                      className="w-full h-[48px] px-4 bg-red-50/30 border border-red-200/50 rounded-[14px] text-[16px] font-black tabular-nums text-red-700 placeholder:text-red-700/30 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all shadow-sm"
+                      value={form.amount}
+                      onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex-[0.8]">
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Date</label>
+                    <input
+                      type="date"
+                      required
+                      className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all shadow-sm"
+                      value={form.date}
+                      onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Note (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Shop rent / Machine oil"
+                    className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all shadow-sm"
+                    value={form.note}
+                    onChange={(e) => setForm({ ...form, note: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-4">
                 <button
                   type="button"
-                  onClick={() => setDeleting(x.id)}
-                  className="p-1 cursor-pointer"
-                  style={{ color: 'var(--color-due)' }}
-                  title="Delete expense"
-                  aria-label="Delete expense"
+                  onClick={() => setForm(null)}
+                  disabled={saving}
+                  className="flex-1 py-4 rounded-[14px] font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 transition-colors cursor-pointer"
                 >
-                  <Trash2 size={14} />
+                  Cancel
                 </button>
-              )}
-            </td>
-          </tr>
-        )}
-      />
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-[2] py-4 rounded-[14px] font-black text-white bg-gradient-to-b from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 shadow-[0_4px_12px_rgba(239,68,68,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer border border-red-600/50"
+                >
+                  {saving ? 'Saving...' : 'Save Expense'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Button */}
+      {!form && (
+        <button
+          onClick={startAdd}
+          className="fixed bottom-[80px] right-5 sm:right-8 bg-gradient-to-b from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white px-6 py-4 rounded-full shadow-[0_8px_30px_-8px_rgba(239,68,68,0.5)] hover:shadow-[0_12px_40px_-8px_rgba(239,68,68,0.6)] flex items-center gap-2.5 font-black transition-all active:scale-95 z-40 border border-red-400/50 hover:-translate-y-1"
+        >
+          <Plus size={22} strokeWidth={3} /> <span className="tracking-wide">Log Expense</span>
+        </button>
       )}
     </div>
   )

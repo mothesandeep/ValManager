@@ -1,15 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Save, Check, Trash2, Plus } from 'lucide-react'
-import { fetchParties, updateParty } from '../lib/queries'
+import { fetchParties, updateParty } from '../lib/api/parties'
+
 import {
   getGlobalSettings,
   saveGlobalSettings,
   getTarRates,
   saveTarRates,
   type TarRateConfig,
+  getPartyBigRolaMap,
+  savePartyBigRolaWeight,
 } from '../lib/settings'
 import type { Party } from '../types'
-import { Button } from '../components/ui/UIComponents'
 
 // ── Small reusable label/input pair ─────────────────────────────────────────
 function SettingRow({
@@ -26,9 +28,9 @@ function SettingRow({
   placeholder?: string
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-4 border-b border-[var(--color-border-soft)] last:border-0">
-      <span className="text-base font-semibold text-[var(--color-ink)]">{label}</span>
-      <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between gap-4 py-4 border-b border-gray-100 last:border-0 group">
+      <span className="text-[15px] font-extrabold text-gray-700 tracking-tight group-hover:text-gray-900 transition-colors">{label}</span>
+      <div className="flex items-center gap-3">
         <input
           type="number"
           inputMode="numeric"
@@ -36,25 +38,28 @@ function SettingRow({
           value={value}
           onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, ''))}
           placeholder={placeholder}
-          className="w-24 px-3 py-2 rounded-lg border text-base font-bold text-center text-[var(--color-ink)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-brass)]"
-          style={{ borderColor: 'var(--color-border)' }}
+          className="w-24 h-11 px-3 rounded-[12px] bg-gray-50/50 border border-gray-200 text-[15px] font-black text-center tabular-nums text-gray-900 focus:outline-none focus:bg-white focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-xs"
         />
-        <span className="text-sm text-[var(--color-ink-soft)] w-10">{unit}</span>
+        <span className="text-[13px] font-bold text-gray-400 w-10">{unit}</span>
       </div>
     </div>
   )
 }
 
 // ── Card wrapper ─────────────────────────────────────────────────────────────
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div
-      className="rounded-2xl border p-5 sm:p-6 space-y-1"
-      style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}
-    >
-      <h2 className="text-lg font-bold mb-3" style={{ color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
-        {title}
-      </h2>
+    <div className="rounded-[24px] p-6 sm:p-7 bg-white shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100 relative overflow-hidden">
+      <div className="mb-6">
+        <h2 className="text-[19px] font-black text-gray-900 tracking-tight mb-1">
+          {title}
+        </h2>
+        {subtitle && (
+          <p className="text-[13px] font-medium text-gray-500 leading-relaxed max-w-lg">
+            {subtitle}
+          </p>
+        )}
+      </div>
       {children}
     </div>
   )
@@ -63,20 +68,31 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 export default function Settings() {
   // ── Global weights ───────────────────────────────────────────────────────
   const [rolaWeight, setRolaWeight] = useState('200')
+  const [bigRolaWeight, setBigRolaWeight] = useState('250')
   const [bungriWeight, setBungriWeight] = useState('70')
+  const [boriWeight, setBoriWeight] = useState('100')
   const [weightSaved, setWeightSaved] = useState(false)
 
   useEffect(() => {
     const s = getGlobalSettings()
     setRolaWeight(String(s.defaultRolaGrams))
+    setBigRolaWeight(String(s.defaultBigRolaGrams))
     setBungriWeight(String(s.defaultBungariGrams))
+    setBoriWeight(String(s.defaultBoriGrams || 100))
   }, [])
 
   const saveWeights = () => {
     const r = parseInt(rolaWeight, 10)
+    const br = parseInt(bigRolaWeight, 10)
     const b = parseInt(bungriWeight, 10)
+    const bo = parseInt(boriWeight, 10)
     if (!r || !b) return
-    saveGlobalSettings({ defaultRolaGrams: r, defaultBungariGrams: b })
+    saveGlobalSettings({
+      defaultRolaGrams: r,
+      defaultBigRolaGrams: br || 250,
+      defaultBungariGrams: b,
+      defaultBoriGrams: bo || 100,
+    })
     setWeightSaved(true)
     setTimeout(() => setWeightSaved(false), 2500)
   }
@@ -128,7 +144,7 @@ export default function Settings() {
   // ── Party-wise weights ───────────────────────────────────────────────────
   const [parties, setParties] = useState<Party[]>([])
   const [partyLoading, setPartyLoading] = useState(true)
-  const [partyEdits, setPartyEdits] = useState<Record<string, { rola: string; bungri: string }>>({})
+  const [partyEdits, setPartyEdits] = useState<Record<string, { rola: string; bigRola: string }>>({})
   const [partySaved, setPartySaved] = useState<Record<string, boolean>>({})
 
   const loadParties = useCallback(async () => {
@@ -136,11 +152,12 @@ export default function Settings() {
     try {
       const data = await fetchParties()
       setParties(data)
-      const edits: Record<string, { rola: string; bungri: string }> = {}
+      const bigMap = getPartyBigRolaMap()
+      const edits: Record<string, { rola: string; bigRola: string }> = {}
       data.forEach((p) => {
         edits[p.id] = {
           rola: p.default_rola_weight_g != null ? String(p.default_rola_weight_g) : '',
-          bungri: p.default_bungari_weight_g != null ? String(p.default_bungari_weight_g) : '',
+          bigRola: bigMap[p.id] ? String(bigMap[p.id]) : '',
         }
       })
       setPartyEdits(edits)
@@ -156,101 +173,87 @@ export default function Settings() {
     if (!e) return
     await updateParty(partyId, {
       default_rola_weight_g: e.rola ? parseInt(e.rola, 10) : null,
-      default_bungari_weight_g: e.bungri ? parseInt(e.bungri, 10) : null,
     })
+    savePartyBigRolaWeight(partyId, e.bigRola ? parseInt(e.bigRola, 10) : null)
     setPartySaved((prev) => ({ ...prev, [partyId]: true }))
     setTimeout(() => setPartySaved((prev) => ({ ...prev, [partyId]: false })), 2500)
   }
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto pb-10">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-ink)' }}>
+    <div className="space-y-6 max-w-3xl mx-auto pb-12 animate-in fade-in duration-500">
+      <div className="px-1">
+        <h1 className="text-[28px] font-black tracking-tight text-gray-900 mb-1.5">
           Settings
         </h1>
-        <p className="text-sm text-[var(--color-ink-soft)] mt-1">
-          Weights aur rates configure karo — dispatch me automatically apply honge.
+        <p className="text-[14px] font-medium text-gray-500 leading-relaxed">
+          Configure default weights and rates. These will apply automatically across all receiving and dispatch entries.
         </p>
       </div>
 
       {/* ── 1. Global Weights ─────────────────────────────────────────────── */}
-      <Card title="Default Weights">
-        <SettingRow
-          label="Rola Weight"
-          value={rolaWeight}
-          onChange={setRolaWeight}
-          unit="grams"
-          placeholder="200"
-        />
-        <SettingRow
-          label="Bungri Weight"
-          value={bungriWeight}
-          onChange={setBungriWeight}
-          unit="grams"
-          placeholder="70"
-        />
-        <div className="pt-3">
-          <Button onClick={saveWeights} className="w-full sm:w-auto flex items-center justify-center gap-2 py-2.5">
-            {weightSaved ? <><Check size={16} /> Saved!</> : <><Save size={16} /> Save Weights</>}
-          </Button>
+      <Card title="Default Weights" subtitle="The baseline configuration for all new entries.">
+        <div className="mb-6">
+          <SettingRow label="Normal Rola Weight" value={rolaWeight} onChange={setRolaWeight} unit="grams" placeholder="200" />
+          <SettingRow label="Big Rola Weight" value={bigRolaWeight} onChange={setBigRolaWeight} unit="grams" placeholder="250" />
+          <SettingRow label="Bungri Weight" value={bungriWeight} onChange={setBungriWeight} unit="grams" placeholder="70" />
+          <SettingRow label="Bori (Bag) Tare" value={boriWeight} onChange={setBoriWeight} unit="grams" placeholder="100" />
+        </div>
+        <div>
+          <button
+            onClick={saveWeights}
+            className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-[14px] font-black text-white bg-gradient-to-b from-[#b58c50] to-[#997036] hover:from-[#a57b3f] hover:to-[#8a632b] shadow-[0_4px_12px_rgba(165,123,63,0.3)] transition-all cursor-pointer text-[14px]"
+          >
+            {weightSaved ? <><Check size={18} strokeWidth={3} /> Saved</> : <><Save size={18} strokeWidth={2.5} /> Save Weights</>}
+          </button>
         </div>
       </Card>
 
       {/* ── 2. Tar Rate Table ─────────────────────────────────────────────── */}
-      <Card title="Tar Rate (₹/kg)">
-        <p className="text-sm text-[var(--color-ink-soft)] mb-4">
-          Dispatch me Tar select karo — rate automatic aayega (S aur Z dono ke liye same rate).
-        </p>
-
-        {/* Table */}
-        <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+      <Card title="Tar Rate (₹/kg)" subtitle="Set the Paisa per kg based on Tar. Rate applies to both S and Z twists.">
+        <div className="rounded-[16px] border border-gray-200/60 overflow-hidden mb-5 shadow-sm">
           <table className="w-full">
             <thead>
-              <tr style={{ background: 'var(--color-paper)', borderBottom: '1px solid var(--color-border-soft)' }}>
-                <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--color-ink-soft)]">Tar</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--color-ink-soft)]">Rate (₹/kg)</th>
-                <th className="px-4 py-3 w-12" />
+              <tr className="bg-gray-50/80 border-b border-gray-200/60">
+                <th className="text-left px-5 py-3.5 text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Tar</th>
+                <th className="text-left px-5 py-3.5 text-[10px] font-extrabold uppercase tracking-widest text-gray-400">Rate (₹/kg)</th>
+                <th className="px-5 py-3.5 w-14" />
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100">
               {tarRates.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="text-center py-8 text-sm text-[var(--color-ink-soft)]">
-                    Koi Tar nahi hai. "+ Add Tar" se add karo.
+                  <td colSpan={3} className="text-center py-10">
+                    <p className="text-[13px] font-bold text-gray-400">No rates configured. Add one below.</p>
                   </td>
                 </tr>
               ) : (
-                tarRates.map((r, idx) => (
-                  <tr
-                    key={r.tar}
-                    style={{ borderTop: idx > 0 ? '1px solid var(--color-border-soft)' : undefined }}
-                  >
-                    <td className="px-4 py-3">
-                      <span className="text-base font-bold text-[var(--color-ink)]">{r.tar} Tar</span>
+                tarRates.map((r) => (
+                  <tr key={r.tar} className="group hover:bg-gray-50/50 transition-colors">
+                    <td className="px-5 py-4">
+                      <span className="text-[15px] font-black text-gray-900 tracking-tight">{r.tar} Tar</span>
                     </td>
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm text-[var(--color-ink-soft)]">₹</span>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-bold text-gray-400">₹</span>
                         <input
                           type="number"
                           min="0"
                           step="1"
                           value={r.rate || ''}
                           onChange={(e) => updateRate(r.tar, e.target.value)}
-                          className="w-24 px-3 py-2 rounded-lg border text-base font-semibold text-center text-[var(--color-ink)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-brass)]"
-                          style={{ borderColor: 'var(--color-border)' }}
+                          className="w-24 h-11 px-3 rounded-[12px] bg-white border border-gray-200 text-[15px] font-black tabular-nums text-gray-900 focus:outline-none focus:bg-white focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-xs"
                           placeholder="0"
                         />
                       </div>
                     </td>
-                    <td className="px-4 py-2 text-center">
+                    <td className="px-5 py-3 text-center">
                       <button
                         type="button"
                         onClick={() => deleteTar(r.tar)}
-                        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all cursor-pointer opacity-50 group-hover:opacity-100"
                         title="Delete"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={18} strokeWidth={2.5} />
                       </button>
                     </td>
                   </tr>
@@ -261,24 +264,23 @@ export default function Settings() {
         </div>
 
         {/* Add new Tar row */}
-        <div className="pt-4 border-t border-[var(--color-border-soft)] mt-4 space-y-3">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-[var(--color-ink-soft)]">Tar (number)</label>
+        <div className="p-4 bg-gray-50/50 rounded-[16px] border border-gray-100 mb-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+            <div className="flex-1 w-full">
+              <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5 pl-1">Tar (number)</label>
               <input
                 type="number"
                 min="1"
                 value={newTar}
                 onChange={(e) => { setNewTar(e.target.value); setAddError('') }}
                 placeholder="e.g. 9"
-                className="w-24 px-3 py-2.5 rounded-lg border text-base font-semibold text-center text-[var(--color-ink)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-brass)]"
-                style={{ borderColor: addError ? '#ef4444' : 'var(--color-border)' }}
+                className={`w-full h-11 px-4 rounded-[12px] bg-white border ${addError ? 'border-red-300 focus:border-red-400 focus:ring-red-400/10' : 'border-gray-200 focus:border-[#a57b3f] focus:ring-[#a57b3f]/10'} text-[15px] font-black tabular-nums focus:outline-none focus:ring-4 transition-all shadow-xs`}
               />
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-[var(--color-ink-soft)]">Rate (₹/kg)</label>
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm text-[var(--color-ink-soft)]">₹</span>
+            <div className="flex-1 w-full">
+              <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5 pl-1">Rate (₹/kg)</label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[14px] font-bold text-gray-400">₹</span>
                 <input
                   type="number"
                   min="0"
@@ -286,105 +288,107 @@ export default function Settings() {
                   value={newRate}
                   onChange={(e) => { setNewRate(e.target.value); setAddError('') }}
                   placeholder="e.g. 22"
-                  className="w-24 px-3 py-2.5 rounded-lg border text-base font-semibold text-center text-[var(--color-ink)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-brass)]"
-                  style={{ borderColor: addError ? '#ef4444' : 'var(--color-border)' }}
+                  className={`w-full h-11 pl-8 pr-4 rounded-[12px] bg-white border ${addError ? 'border-red-300 focus:border-red-400 focus:ring-red-400/10' : 'border-gray-200 focus:border-[#a57b3f] focus:ring-[#a57b3f]/10'} text-[15px] font-black tabular-nums focus:outline-none focus:ring-4 transition-all shadow-xs`}
                 />
               </div>
             </div>
-            <button
-              type="button"
-              onClick={addTar}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-[var(--color-brass)]/10 text-[var(--color-brass)] border border-[var(--color-brass)]/40 hover:bg-[var(--color-brass)]/20 transition-colors cursor-pointer"
-            >
-              <Plus size={16} /> Add Tar
-            </button>
+            <div className="w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={addTar}
+                className="w-full sm:w-auto h-11 px-5 rounded-[12px] text-[13px] font-black bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors cursor-pointer border border-amber-200/50 flex items-center justify-center gap-2 tracking-wide"
+              >
+                <Plus size={16} strokeWidth={3} /> Add Tar
+              </button>
+            </div>
           </div>
-          {addError && <p className="text-xs text-red-500">{addError}</p>}
+          {addError && <p className="text-[11px] font-bold text-red-500 mt-2.5 pl-1">{addError}</p>}
         </div>
 
-        <div className="pt-3">
-          <Button onClick={saveRates} className="w-full sm:w-auto flex items-center justify-center gap-2 py-2.5">
-            {ratesSaved ? <><Check size={16} /> Saved!</> : <><Save size={16} /> Save Rates</>}
-          </Button>
+        <div>
+          <button
+            onClick={saveRates}
+            className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-[14px] font-black text-white bg-gradient-to-b from-[#b58c50] to-[#997036] hover:from-[#a57b3f] hover:to-[#8a632b] shadow-[0_4px_12px_rgba(165,123,63,0.3)] transition-all cursor-pointer text-[14px]"
+          >
+            {ratesSaved ? <><Check size={18} strokeWidth={3} /> Saved</> : <><Save size={18} strokeWidth={2.5} /> Save Rates</>}
+          </button>
         </div>
       </Card>
 
       {/* ── 3. Party-wise weights (optional overrides) ─────────────────────── */}
-      <Card title="Party-wise Weights (Optional)">
-        <p className="text-sm text-[var(--color-ink-soft)] mb-4">
-          Kisi party ka weight alag hai toh yahan set karo. Khaali rahega toh default weight lagega.
-        </p>
-
+      <Card title="Party-wise Weights" subtitle="Optional overrides for specific parties. Leave blank to use defaults.">
         {partyLoading ? (
-          <p className="text-sm text-[var(--color-ink-soft)] py-4">Loading...</p>
+          <div className="py-10 text-center text-[13px] font-bold text-gray-400 animate-pulse">Loading parties...</div>
         ) : parties.length === 0 ? (
-          <p className="text-sm text-[var(--color-ink-soft)] py-4">Koi party nahi mili. Pehle party add karo.</p>
+          <div className="py-10 text-center text-[13px] font-bold text-gray-400">No parties found. Please add a party first.</div>
         ) : (
-          <div className="space-y-0">
-            {/* Header row */}
-            <div className="hidden sm:grid grid-cols-12 gap-2 px-3 py-2 text-xs font-semibold text-[var(--color-ink-soft)] uppercase tracking-wide bg-[var(--color-paper)] rounded-lg mb-2">
-              <div className="col-span-4">Party</div>
-              <div className="col-span-3 text-center">Rola (g)</div>
-              <div className="col-span-3 text-center">Bungri (g)</div>
-              <div className="col-span-2" />
-            </div>
-
+          <div className="mt-4 rounded-[16px] border border-gray-100 overflow-hidden divide-y divide-gray-100 bg-white shadow-sm">
             {parties.map((p) => {
-              const e = partyEdits[p.id] || { rola: '', bungri: '' }
+              const e = partyEdits[p.id] || { rola: '', bigRola: '' }
               return (
-                <div
-                  key={p.id}
-                  className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center px-3 py-3 rounded-xl"
-                  style={{ borderBottom: '1px solid var(--color-border-soft)' }}
-                >
-                  {/* Party name */}
-                  <div className="sm:col-span-4">
-                    <span className="font-semibold text-[var(--color-ink)]">{p.name}</span>
-                  </div>
+                <div key={p.id} className="px-5 py-4 hover:bg-gray-50/30 transition-colors group">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-5">
+                    
+                    {/* Left: Party Name */}
+                    <div className="sm:w-1/4 shrink-0">
+                      <span className="font-extrabold text-[15px] text-gray-900 tracking-tight group-hover:text-[#a57b3f] transition-colors">{p.name}</span>
+                    </div>
 
-                  {/* Rola */}
-                  <div className="sm:col-span-3 flex items-center gap-2 sm:justify-center">
-                    <label className="text-xs text-[var(--color-ink-soft)] sm:hidden">Rola:</label>
-                    <input
-                      type="number"
-                      min="1"
-                      placeholder="Default"
-                      value={e.rola}
-                      onChange={(v) =>
-                        setPartyEdits((prev) => ({ ...prev, [p.id]: { ...e, rola: v.target.value.replace(/[^0-9]/g, '') } }))
-                      }
-                      className="w-24 px-2 py-1.5 rounded-lg border text-sm font-semibold text-center text-[var(--color-ink)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-brass)]"
-                      style={{ borderColor: 'var(--color-border)' }}
-                    />
-                    <span className="text-xs text-[var(--color-ink-soft)]">g</span>
-                  </div>
+                    {/* Right: Inputs & Save */}
+                    <div className="flex flex-row items-end gap-3 flex-1 mt-1 sm:mt-0">
+                      {/* Middle: Inputs Grid */}
+                      <div className="grid grid-cols-2 gap-2 flex-1">
+                        <div>
+                          <label className="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1 truncate">Normal Rola</label>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min="1"
+                              placeholder="Def"
+                              value={e.rola}
+                              onChange={(v) =>
+                                setPartyEdits((prev) => ({ ...prev, [p.id]: { ...e, rola: v.target.value.replace(/[^0-9]/g, '') } }))
+                              }
+                              className="w-full h-9 px-2 rounded-[8px] bg-gray-50 border border-gray-200 text-[13px] font-black text-center tabular-nums focus:outline-none focus:bg-white focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-xs"
+                            />
+                            <span className="text-[10px] font-bold text-gray-400 hidden sm:inline">g</span>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1 truncate">Big Rola</label>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min="1"
+                              placeholder="Def"
+                              value={e.bigRola}
+                              onChange={(v) =>
+                                setPartyEdits((prev) => ({ ...prev, [p.id]: { ...e, bigRola: v.target.value.replace(/[^0-9]/g, '') } }))
+                              }
+                              className="w-full h-9 px-2 rounded-[8px] bg-gray-50 border border-gray-200 text-[13px] font-black text-center tabular-nums focus:outline-none focus:bg-white focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-xs"
+                            />
+                            <span className="text-[10px] font-bold text-gray-400 hidden sm:inline">g</span>
+                          </div>
+                        </div>
+                      </div>
 
-                  {/* Bungri */}
-                  <div className="sm:col-span-3 flex items-center gap-2 sm:justify-center">
-                    <label className="text-xs text-[var(--color-ink-soft)] sm:hidden">Bungri:</label>
-                    <input
-                      type="number"
-                      min="1"
-                      placeholder="Default"
-                      value={e.bungri}
-                      onChange={(v) =>
-                        setPartyEdits((prev) => ({ ...prev, [p.id]: { ...e, bungri: v.target.value.replace(/[^0-9]/g, '') } }))
-                      }
-                      className="w-24 px-2 py-1.5 rounded-lg border text-sm font-semibold text-center text-[var(--color-ink)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-brass)]"
-                      style={{ borderColor: 'var(--color-border)' }}
-                    />
-                    <span className="text-xs text-[var(--color-ink-soft)]">g</span>
-                  </div>
+                      {/* Right: Save Button */}
+                      <div className="shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => saveParty(p.id)}
+                          className={`flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-[8px] text-[11px] font-black transition-all cursor-pointer shadow-sm w-auto ${
+                            partySaved[p.id]
+                              ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/50'
+                              : 'bg-white text-gray-700 border border-gray-200 hover:border-[#a57b3f] hover:text-[#a57b3f]'
+                          }`}
+                        >
+                          {partySaved[p.id] ? <><Check size={14} strokeWidth={3} /> Saved</> : <><Save size={14} strokeWidth={2.5} /> Save</>}
+                        </button>
+                      </div>
+                    </div>
 
-                  {/* Save */}
-                  <div className="sm:col-span-2 flex justify-start sm:justify-end">
-                    <button
-                      type="button"
-                      onClick={() => saveParty(p.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-brass)] text-white hover:opacity-90 transition-opacity cursor-pointer"
-                    >
-                      {partySaved[p.id] ? <><Check size={13} /> Saved</> : <><Save size={13} /> Save</>}
-                    </button>
                   </div>
                 </div>
               )

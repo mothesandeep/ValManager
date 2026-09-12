@@ -51,21 +51,22 @@ h1, h2, h3, h4, h5, h6 {
   font-variant-numeric: tabular-nums;
 }
 
-/* Input and Select focus */
+/* Input and Select focus — visible outline for Android + iOS */
 input:focus, select:focus, textarea:focus {
-  outline: none;
+  outline: 2px solid var(--color-brass);
+  outline-offset: 0px;
   border-color: var(--color-brass) !important;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brass) 20%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brass) 15%, transparent);
 }
 
 ::selection {
   background: color-mix(in srgb, var(--color-brass) 20%, transparent);
 }
 
-/* Minimum tap target */
+/* Minimum tap target — 44px per iOS HIG / design.md */
 button, a, [role="button"] {
-  min-height: 36px;
-  min-width: 36px;
+  min-height: 44px;
+  min-width: 44px;
 }
 
 /* Scrollbar */
@@ -79,4 +80,25 @@ button, a, [role="button"] {
 ::-webkit-scrollbar-thumb {
   background: var(--color-border);
   border-radius: 3px;
+}
+
+/* ── Skeleton loading shimmer ── */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-border-soft) 25%,
+    var(--color-border) 50%,
+    var(--color-border-soft) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: 6px;
+  color: transparent !important;
+  user-select: none;
+  pointer-events: none;
 }

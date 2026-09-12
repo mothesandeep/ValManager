@@ -45,7 +45,7 @@ export interface Receipt {
 
 // Receipt joined with the party's name for display
 export interface ReceiptWithParty extends Receipt {
-  party: { name: string } | null
+  party: { name: string; default_rola_weight_g?: number | null } | null
 }
 
 export interface ProductionOrder {
@@ -65,7 +65,7 @@ export interface ProductionWithReceipt extends ProductionOrder {
     net_weight: number
     color: string | null
     challan_no: string | null
-    party: { name: string } | null
+    party: { name: string; default_rola_weight_g?: number | null } | null
   } | null
 }
 
@@ -90,7 +90,7 @@ export interface Dispatch {
 
 // Dispatch joined with the party's name
 export interface DispatchWithParty extends Dispatch {
-  party: { name: string } | null
+  party: { name: string; default_rola_weight_g?: number | null } | null
 }
 
 export interface RolaReturn {
@@ -102,7 +102,7 @@ export interface RolaReturn {
 }
 
 export interface RolaReturnWithParty extends RolaReturn {
-  party: { name: string } | null
+  party: { name: string; default_rola_weight_g?: number | null } | null
 }
 
 export interface Payment {
@@ -115,7 +115,7 @@ export interface Payment {
 }
 
 export interface PaymentWithParty extends Payment {
-  party: { name: string } | null
+  party: { name: string; default_rola_weight_g?: number | null } | null
 }
 
 export interface Expense {
@@ -141,7 +141,7 @@ export interface GapchaReconciliation {
 }
 
 export interface GapchaReconciliationWithParty extends GapchaReconciliation {
-  party: { name: string } | null
+  party: { name: string; default_rola_weight_g?: number | null } | null
 }
 
 export interface GapchaSale {
@@ -157,7 +157,7 @@ export interface GapchaSale {
 }
 
 export interface GapchaSaleWithParty extends GapchaSale {
-  party: { name: string } | null
+  party: { name: string; default_rola_weight_g?: number | null } | null
 }
 
 export interface OverallGapchaStats {
@@ -182,7 +182,7 @@ export interface SyncFailure {
 
 // ── Shared constants ──────────────────────────────────────────────────────────
 
-export const COLOR_TYPES = ['Gold', 'Silver', 'Pelmet', 'Water', 'Antique'] as const
+export const COLOR_TYPES = ['Clear', 'M.gold', 'Gold', 'Silver', 'Pelmet', 'Water', 'Antique'] as const
 export const KASAB_COLORS = COLOR_TYPES
 
 export const CORD_TYPES = [4, 8, 10, 12, 14, 18] as const
@@ -265,7 +265,7 @@ export function currentMonthStr(d = new Date()): string {
   return `${y}-${m}`
 }
 
-/** Format YYYY-MM to "September 2026" or "All Time" */
+/** Format YYYY-MM to "Sep 2026" or "All Time" */
 export function formatMonthYear(monthStr?: string | null): string {
   if (!monthStr || monthStr === 'all') return 'All Time'
   const parts = monthStr.split('-').map(Number)
@@ -273,7 +273,7 @@ export function formatMonthYear(monthStr?: string | null): string {
   const m = parts[1]
   if (!y || !m) return monthStr
   const dt = new Date(y, m - 1, 1)
-  return dt.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+  return dt.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
 }
 
 /** Advance or rewind a YYYY-MM month string by offset */

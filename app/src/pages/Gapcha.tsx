@@ -6,20 +6,14 @@ import {
   Layers,
   Sparkles,
   Info,
+  X,
 } from 'lucide-react'
-import {
-  fetchParties,
-  fetchReceipts,
-  fetchDispatches,
-  fetchGapchaSales,
-  fetchReconciliations,
-  insertGapchaSale,
-  deleteGapchaSale,
-  insertGapchaSurplus,
-  deleteGapchaSurplus,
-  type GapchaSalePayload,
-  type GapchaSurplusPayload,
-} from '../lib/queries'
+import { fetchParties } from '../lib/api/parties'
+import { fetchReceipts } from '../lib/api/receipts'
+import { fetchDispatches } from '../lib/api/dispatch'
+import { fetchGapchaSales, fetchReconciliations, insertGapchaSale, deleteGapchaSale, insertGapchaSurplus, deleteGapchaSurplus, type GapchaSalePayload, type GapchaSurplusPayload } from '../lib/api/gapcha'
+
+
 import { computeOverallGapchaStats } from '../lib/calculations'
 import { useMonth } from '../context/MonthContext'
 import type {
@@ -36,16 +30,15 @@ import {
   fmtMoney,
   todayStr,
 } from '../types'
-import {
-  SectionHeader,
-  KpiCard,
-  Button,
-  Field,
-  TextInput,
-  Select,
-  ConfirmDelete,
-  Table,
-} from '../components/ui/UIComponents'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { KpiCard } from '../components/ui/KpiCard'
+import { Button } from '../components/ui/Button'
+import { Field } from '../components/ui/Field'
+import { TextInput } from '../components/ui/TextInput'
+import { Select } from '../components/ui/Select'
+import { ConfirmDelete } from '../components/ui/ConfirmDelete'
+import { Table } from '../components/ui/Table'
+import { EmptyState } from '../components/ui/EmptyState'
 
 interface SaleFormState {
   partyId: string
@@ -333,20 +326,15 @@ export default function Gapcha() {
 
       {errorMsg && (
         <div
-          className="rounded-lg p-3 text-xs font-medium flex items-center justify-between shadow-xs"
-          style={{
-            background: 'var(--color-due-bg)',
-            color: 'var(--color-due)',
-            border: '1px solid color-mix(in srgb, var(--color-due) 25%, transparent)',
-          }}
+          className="rounded-[16px] p-4 text-xs font-bold flex items-center justify-between shadow-sm bg-red-50 text-red-600 border border-red-100"
         >
-          <div className="flex items-center gap-1.5">
-            <AlertCircle size={15} className="shrink-0" />
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} className="shrink-0" />
             <span>{errorMsg}</span>
           </div>
           <button
             onClick={() => setErrorMsg(null)}
-            className="underline cursor-pointer font-semibold"
+            className="underline cursor-pointer"
           >
             Dismiss
           </button>
@@ -354,478 +342,357 @@ export default function Gapcha() {
       )}
 
       {/* ── 3 KPI Cards (Consolidated Overview) ─────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <KpiCard
-          label="In Workshop"
-          value={fmtKg(overallStats.unprocessedKasabWeight)}
-          sub={`${overallStats.totalReceivedNetWeight.toFixed(3)} received − ${overallStats.totalReturnedNetWeight.toFixed(3)} returned`}
-          loading={loading}
-        />
-        <KpiCard
-          label="Available to Sell"
-          value={fmtKg(overallStats.remainingGapchaWeight)}
-          sub={`${overallStats.totalGapchaGenerated.toFixed(3)} created − ${overallStats.totalGapchaSold.toFixed(3)} sold`}
-          tone={overallStats.remainingGapchaWeight > 0 ? 'positive' : undefined}
-          loading={loading}
-        />
-        <KpiCard
-          label="Sold This Month"
-          value={fmtKg(overallStats.totalGapchaSold)}
-          sub={overallStats.totalGapchaRevenue > 0 ? `${fmtMoney(overallStats.totalGapchaRevenue)} revenue` : 'No sales yet'}
-          tone={overallStats.totalGapchaSold > 0 ? 'positive' : undefined}
-          loading={loading}
-        />
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+        <div className="rounded-[20px] p-5 bg-white shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100/80 transition-all">
+          <div className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 mb-2">In Workshop</div>
+          <div className="text-[24px] font-black tabular-nums leading-none tracking-tight text-gray-900 mb-2">
+            {fmtKg(overallStats.unprocessedKasabWeight)} <span className="text-[14px] text-gray-400 font-bold tracking-normal">kg</span>
+          </div>
+          <div className="text-[10px] font-medium text-gray-400">{overallStats.totalReceivedNetWeight.toFixed(3)} received − {overallStats.totalReturnedNetWeight.toFixed(3)} returned</div>
+        </div>
+        
+        <div className="rounded-[20px] p-5 bg-[#a57b3f]/10 shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-[#a57b3f]/20 transition-all">
+          <div className="text-[10px] font-extrabold uppercase tracking-widest text-[#a57b3f]/80 mb-2">Available To Sell</div>
+          <div className="text-[24px] font-black tabular-nums leading-none tracking-tight text-[#8c6530] mb-2">
+            {fmtKg(overallStats.remainingGapchaWeight)} <span className="text-[14px] text-[#a57b3f]/60 font-bold tracking-normal">kg</span>
+          </div>
+          <div className="text-[10px] font-bold text-[#a57b3f]/60">{overallStats.totalGapchaGenerated.toFixed(3)} created − {overallStats.totalGapchaSold.toFixed(3)} sold</div>
+        </div>
 
-      {/* ── Navigation Tabs & Inline Actions ───────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--color-border)]">
-        <nav className="flex items-center gap-6 overflow-x-auto">
-          <button
-            type="button"
-            onClick={() => setActiveTab('parties')}
-            className={`pb-3 text-sm font-semibold transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'parties'
-                ? 'border-[var(--color-brass)] text-[var(--color-brass)]'
-                : 'border-transparent text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]'
-            }`}
-          >
-            <Layers size={15} /> Party Standing ({parties.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('sales')}
-            className={`pb-3 text-sm font-semibold transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'sales'
-                ? 'border-[var(--color-brass)] text-[var(--color-brass)]'
-                : 'border-transparent text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]'
-            }`}
-          >
-            <Scale size={15} /> Sales History Ledger ({filteredSales.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('surplus')}
-            className={`pb-3 text-sm font-semibold transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'surplus'
-                ? 'border-[var(--color-brass)] text-[var(--color-brass)]'
-                : 'border-transparent text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]'
-            }`}
-          >
-            <Sparkles size={15} /> Tare Surplus Log ({filteredSurplus.length})
-          </button>
-        </nav>
-
-        <div className="flex items-center gap-2 pb-2 sm:pb-2.5 shrink-0">
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setSurplusForm({
-                partyId: parties[0]?.id || '',
-                date: todayStr(),
-                weightGrams: '',
-                note: '',
-              })
-              setIsSurplusOpen(true)
-            }}
-          >
-            <Sparkles size={14} /> Log Tare Surplus
-          </Button>
-          <Button
-            onClick={() => {
-              setSaleForm({ ...EMPTY_SALE_FORM, date: todayStr() })
-              setIsSaleOpen(true)
-            }}
-          >
-            <Scale size={14} /> Record Gapcha Sale
-          </Button>
+        <div className="rounded-[20px] p-5 bg-emerald-50/50 shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-emerald-100/50 transition-all">
+          <div className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-600/70 mb-2">Sold This Month</div>
+          <div className="text-[24px] font-black tabular-nums leading-none tracking-tight text-emerald-700 mb-2">
+            {fmtKg(overallStats.totalGapchaSold)} <span className="text-[14px] text-emerald-600/50 font-bold tracking-normal">kg</span>
+          </div>
+          <div className="text-[10px] font-bold text-emerald-600/50">
+            {overallStats.totalGapchaRevenue > 0 ? `${fmtMoney(overallStats.totalGapchaRevenue)} revenue` : 'No sales yet'}
+          </div>
         </div>
       </div>
 
-      {/* ── Tab 1: Party Standing Table ─────────────────────────── */}
+      {/* ── Navigation Tabs ───────────────────── */}
+      <div className="flex overflow-x-auto pb-4 mb-2 gap-2 hide-scrollbar">
+        <button
+          type="button"
+          onClick={() => setActiveTab('parties')}
+          className={`px-5 py-2.5 rounded-full text-[13px] font-extrabold tracking-wide transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+            activeTab === 'parties'
+              ? 'bg-[#a57b3f]/10 text-[#8c6530] shadow-sm'
+              : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-100'
+          }`}
+        >
+          <Layers size={16} /> Party Standing ({parties.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('sales')}
+          className={`px-5 py-2.5 rounded-full text-[13px] font-extrabold tracking-wide transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+            activeTab === 'sales'
+              ? 'bg-[#a57b3f]/10 text-[#8c6530] shadow-sm'
+              : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-100'
+          }`}
+        >
+          <Scale size={16} /> Sales History Ledger ({filteredSales.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('surplus')}
+          className={`px-5 py-2.5 rounded-full text-[13px] font-extrabold tracking-wide transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+            activeTab === 'surplus'
+              ? 'bg-[#a57b3f]/10 text-[#8c6530] shadow-sm'
+              : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-100'
+          }`}
+        >
+          <Sparkles size={16} /> Tare Surplus Log ({filteredSurplus.length})
+        </button>
+      </div>
+
+      {/* ── Action Buttons ───────────────────── */}
+      <div className="flex gap-3 mb-6">
+        <button
+          onClick={() => {
+            setSurplusForm({ partyId: parties[0]?.id || '', date: todayStr(), weightGrams: '', note: '' })
+            setIsSurplusOpen(true)
+          }}
+          className="flex-1 sm:flex-none py-3 px-6 rounded-2xl font-bold text-[#8c6530] bg-[#a57b3f]/10 hover:bg-[#a57b3f]/20 border border-[#a57b3f]/20 transition-colors cursor-pointer flex items-center justify-center gap-2 text-sm shadow-sm"
+        >
+          <Sparkles size={16} /> Log Tare Surplus
+        </button>
+        <button
+          onClick={() => {
+            setSaleForm({ ...EMPTY_SALE_FORM, date: todayStr() })
+            setIsSaleOpen(true)
+          }}
+          className="flex-1 sm:flex-none py-3 px-6 rounded-2xl font-black text-white bg-gradient-to-b from-[#b88f4b] to-[#a57b3f] hover:from-[#c29a56] hover:to-[#b38848] shadow-[0_4px_12px_rgba(165,123,63,0.3)] transition-all flex items-center justify-center gap-2 text-sm cursor-pointer border border-[#a57b3f]/50"
+        >
+          <Scale size={16} /> Record Gapcha Sale
+        </button>
+      </div>
+
+      {/* ── Tab 1: Party Standing ─────────────────────────── */}
       {activeTab === 'parties' && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs text-[var(--color-ink-soft)]">
-            <span className="font-medium">{parties.length} Parties</span>
-            <span
-              className="inline-flex items-center gap-1 text-[var(--color-ink-soft)] cursor-help"
-              title={`Auto-calculated for ${formattedMonth}: Received Net − Dispatched Net = Pending Stock.`}
-            >
-              <Info size={13} />
-              <span>Pending = Received − Dispatched</span>
-            </span>
-          </div>
-
-          <Table
-            columns={[
-              'Party',
-              'Received',
-              'Dispatched',
-              'Pending',
-              'Gapcha',
-              'Actions',
-            ]}
-            rows={partyRows}
-            emptyText="No parties found."
-            renderRow={(r) => {
-              if (!r.hasActivity) {
-                return (
-                  <tr
-                    key={r.party.id}
-                    className="hover:bg-[#FAF8F3] transition-colors opacity-75 hover:opacity-100"
-                    style={{ borderTop: '1px solid var(--color-border-soft)' }}
-                  >
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      <div className="font-medium text-sm text-[var(--color-ink)]">{r.party.name}</div>
-                    </td>
-                    <td colSpan={4} className="px-4 py-3.5 whitespace-nowrap text-xs text-[var(--color-ink-soft)] italic">
-                      No activity this month
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSaleForm({
-                              ...EMPTY_SALE_FORM,
-                              partyId: r.party.id,
-                              date: todayStr(),
-                            })
-                            setIsSaleOpen(true)
-                          }}
-                          className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-[var(--color-border)] bg-white text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] hover:bg-[var(--color-paper)] cursor-pointer transition-colors"
-                          title="Record Gapcha Sale for this party"
-                        >
-                          <Scale size={13} /> Sell
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSurplusForm({
-                              partyId: r.party.id,
-                              date: todayStr(),
-                              weightGrams: '',
-                              note: '',
-                            })
-                            setIsSurplusOpen(true)
-                          }}
-                          className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-[var(--color-border)] bg-white text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] hover:bg-[var(--color-paper)] cursor-pointer transition-colors"
-                          title="Log tare surplus for this party"
-                        >
-                          <Sparkles size={13} /> + Surplus
-                        </button>
+        <div className="pb-28">
+          <div className="space-y-3">
+            {partyRows.map((r) => (
+              <div
+                key={r.party.id}
+                className={`rounded-[20px] p-5 bg-white border ${
+                  r.hasActivity ? 'border-gray-100/80 shadow-[0_2px_10px_rgba(0,0,0,0.02)]' : 'border-gray-50 shadow-none opacity-60'
+                } transition-all`}
+              >
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-extrabold text-[16px] text-gray-900 tracking-tight">{r.party.name}</h3>
+                </div>
+                
+                {r.hasActivity ? (
+                  <div className="grid grid-cols-2 gap-y-5 gap-x-2">
+                    <div>
+                      <div className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-1">Received (Net)</div>
+                      <div className="font-bold tabular-nums text-gray-900 text-[14px]">{fmtKg(r.receivedNet)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-1">Dispatched (Net)</div>
+                      <div className="font-bold tabular-nums text-gray-900 text-[14px]">{fmtKg(r.returnedNet)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-1">Gapcha Created</div>
+                      <div className="font-black tabular-nums text-emerald-600 text-[14px]">{fmtKg(r.gapchaCreated)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-extrabold uppercase tracking-widest text-[#a57b3f]/70 mb-1">Available Gapcha</div>
+                      <div className="font-black tabular-nums text-[#8c6530] text-[14px]">
+                        {fmtKg(r.availableGapcha)}
                       </div>
-                    </td>
-                  </tr>
-                )
-              }
-
-              return (
-                <tr
-                  key={r.party.id}
-                  className="hover:bg-[#FAF8F3] transition-colors"
-                  style={{ borderTop: '1px solid var(--color-border-soft)' }}
-                >
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <div className="font-semibold text-sm text-[var(--color-ink)]">{r.party.name}</div>
-                    <div className="text-xs text-[var(--color-ink-soft)] mt-0.5">
-                      {r.receiptCount} receipts · {r.dispatchCount} dispatches
                     </div>
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap tabular-nums text-sm font-semibold text-[var(--color-ink)]">
-                    {fmtKg(r.receivedNet)}
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap tabular-nums text-sm font-semibold text-[var(--color-ink)]">
-                    {fmtKg(r.returnedNet)}
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap tabular-nums text-sm font-semibold text-[var(--color-ink)]">
-                    {fmtKg(r.pendingStock)}
-                  </td>
-                  <td
-                    className="px-4 py-3.5 whitespace-nowrap tabular-nums text-sm font-bold"
-                    style={{
-                      color:
-                        r.availableGapcha > 0
-                          ? 'var(--color-brass)'
-                          : 'var(--color-ink-soft)',
-                    }}
-                  >
-                    {fmtKg(r.availableGapcha)}
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSaleForm({
-                            ...EMPTY_SALE_FORM,
-                            partyId: r.party.id,
-                            date: todayStr(),
-                          })
-                          setIsSaleOpen(true)
-                        }}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-[var(--color-brass)] text-white hover:opacity-90 cursor-pointer shadow-xs transition-opacity"
-                        title="Sell available Gapcha for this party"
-                      >
-                        <Scale size={13} /> Sell
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSurplusForm({
-                            partyId: r.party.id,
-                            date: todayStr(),
-                            weightGrams: '',
-                            note: '',
-                          })
-                          setIsSurplusOpen(true)
-                        }}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--color-border)] bg-white text-[var(--color-ink)] hover:bg-[var(--color-paper)] cursor-pointer shadow-xs transition-colors"
-                        title="Log legitimate tare surplus for this party"
-                      >
-                        <Sparkles size={13} /> + Surplus
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            }}
-          />
+                  </div>
+                ) : (
+                  <div className="text-[13px] font-medium text-gray-400 italic">No activity this month</div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       {/* ── Tab 2: Sales History Ledger ─────────────────────────── */}
       {activeTab === 'sales' && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs text-[var(--color-ink-soft)]">
-            <p>Gapcha sales recorded for <strong>{formattedMonth}</strong></p>
-            <span className="font-semibold text-[var(--color-positive)]">
-              Total Revenue: {fmtMoney(overallStats.totalGapchaRevenue)}
-            </span>
-          </div>
-          <Table
-            columns={[
-              'Date',
-              'Buyer',
-              'Origin Party',
-              'Weight Sold',
-              'Rate',
-              'Amount',
-              'Notes',
-              'Actions',
-            ]}
-            rows={filteredSales}
-            emptyText="No Gapcha sales found for this period."
-            renderRow={(s) => (
-              <tr
-                key={s.id}
-                className="hover:bg-[#FAF8F3] transition-colors"
-                style={{ borderTop: '1px solid var(--color-border-soft)' }}
-              >
-                <td className="px-4 py-3.5 whitespace-nowrap text-sm text-[var(--color-ink)]">
-                  {fmtDate(s.date)}
-                </td>
-                <td className="px-4 py-3.5 font-semibold text-sm text-[var(--color-ink)]">
-                  {s.buyer_name}
-                </td>
-                <td className="px-4 py-3.5 text-sm text-[var(--color-ink-soft)]">
-                  {s.party?.name || 'General Stock'}
-                </td>
-                <td className="px-4 py-3.5 tabular-nums font-semibold text-sm text-[var(--color-ink)]">
-                  {fmtKg(s.weight_kg)}
-                </td>
-                <td className="px-4 py-3.5 tabular-nums text-sm text-[var(--color-ink-soft)]">
-                  {s.rate_per_kg ? `₹${s.rate_per_kg}/kg` : '—'}
-                </td>
-                <td className="px-4 py-3.5 tabular-nums font-bold text-sm text-[var(--color-positive)]">
-                  {s.amount ? fmtMoney(s.amount) : '—'}
-                </td>
-                <td className="px-4 py-3.5 text-sm text-[var(--color-ink-soft)] max-w-xs truncate">
-                  {s.note || '—'}
-                </td>
-                <td className="px-4 py-3.5 whitespace-nowrap text-right">
-                  <button
-                    type="button"
-                    onClick={() => setDeletingSaleId(s.id)}
-                    className="p-1.5 rounded-lg text-[var(--color-due)] hover:bg-[var(--color-due-bg)] cursor-pointer transition-colors"
-                    title="Delete Sale"
-                    aria-label="Delete Sale"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </td>
-              </tr>
-            )}
-          />
+        <div className="pb-28">
+          {filteredSales.length === 0 ? (
+            <EmptyState text="No gapcha sales recorded yet for this month." />
+          ) : (
+            <div className="space-y-3">
+              {filteredSales.map((s) => (
+                <div
+                  key={s.id}
+                  className="rounded-[20px] p-5 bg-white border border-emerald-100 shadow-[0_2px_10px_rgba(16,185,129,0.05)] hover:shadow-[0_4px_15px_rgba(16,185,129,0.1)] transition-all flex flex-col group relative overflow-hidden"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h3 className="font-extrabold text-[16px] text-gray-900 tracking-tight">{s.buyer_name}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[11px] font-bold text-gray-400">{fmtDate(s.date)}</span>
+                        {s.party && (
+                          <>
+                            <span className="text-gray-300">·</span>
+                            <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#a57b3f]/70">{s.party.name}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingSaleId(s.id)}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                    >
+                      <Trash2 size={16} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-50">
+                    <div>
+                      <div className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-1">Weight</div>
+                      <div className="font-black tabular-nums text-gray-900 text-[14px]">{fmtKg(s.weight_kg)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-1">Rate</div>
+                      <div className="font-bold tabular-nums text-gray-600 text-[14px]">{s.rate_per_kg ? `₹${s.rate_per_kg}/kg` : '—'}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-1">Total</div>
+                      <div className="font-black tabular-nums text-emerald-600 text-[16px]">{s.amount !== null ? fmtMoney(s.amount) : '—'}</div>
+                    </div>
+                  </div>
+                  {s.note && <div className="mt-3 text-[12px] font-medium text-gray-400 italic">"{s.note}"</div>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── Tab 3: Tare Surplus Log ──────────────────────────────── */}
+      {/* ── Tab 3: Tare Surplus Log ─────────────────────────── */}
       {activeTab === 'surplus' && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs text-[var(--color-ink-soft)]">
-            <p>Legitimate tare surplus weight logged for <strong>{formattedMonth}</strong></p>
-            <span className="font-semibold text-[var(--color-brass)]">
-              Total Created: {fmtKg(overallStats.totalGapchaGenerated)}
-            </span>
-          </div>
-          <Table
-            columns={[
-              'Date',
-              'Party',
-              'Surplus Weight',
-              'Notes / Reference',
-              'Actions',
-            ]}
-            rows={filteredSurplus}
-            emptyText="No tare surplus records logged yet. Click '+ Log Tare Surplus' to add legitimate surplus."
-            renderRow={(rc) => (
-              <tr
-                key={rc.id}
-                className="hover:bg-[#FAF8F3] transition-colors"
-                style={{ borderTop: '1px solid var(--color-border-soft)' }}
-              >
-                <td className="px-4 py-3.5 whitespace-nowrap text-sm text-[var(--color-ink)]">
-                  {fmtDate(rc.date)}
-                </td>
-                <td className="px-4 py-3.5 text-sm font-semibold text-[var(--color-ink)]">
-                  {rc.party?.name || '—'}
-                </td>
-                <td
-                  className="px-4 py-3.5 tabular-nums font-bold text-sm"
-                  style={{
-                    color:
-                      Number(rc.gapcha_weight) > 0
-                        ? 'var(--color-positive)'
-                        : 'var(--color-ink-soft)',
-                  }}
+        <div className="pb-28">
+          {filteredSurplus.length === 0 ? (
+            <EmptyState text="No tare surplus logged yet." />
+          ) : (
+            <div className="space-y-3">
+              {filteredSurplus.map((rc) => (
+                <div
+                  key={rc.id}
+                  className="rounded-[20px] p-5 bg-white border border-[#a57b3f]/20 shadow-[0_2px_10px_rgba(165,123,63,0.05)] hover:shadow-[0_4px_15px_rgba(165,123,63,0.1)] transition-all flex flex-col group"
                 >
-                  {fmtKg(rc.gapcha_weight)}
-                </td>
-                <td className="px-4 py-3.5 text-sm text-[var(--color-ink-soft)] max-w-xs truncate">
-                  {rc.note || '—'}
-                </td>
-                <td className="px-4 py-3.5 whitespace-nowrap text-right">
-                  <button
-                    type="button"
-                    onClick={() => setDeletingSurplusId(rc.id)}
-                    className="p-1.5 rounded-lg text-[var(--color-due)] hover:bg-[var(--color-due-bg)] cursor-pointer transition-colors"
-                    title="Delete Surplus Record"
-                    aria-label="Delete Surplus Record"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </td>
-              </tr>
-            )}
-          />
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h3 className="font-extrabold text-[16px] text-gray-900 tracking-tight">{rc.party?.name ?? '—'}</h3>
+                      <div className="text-[11px] font-bold text-gray-400 mt-1">{fmtDate(rc.date)}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingSurplusId(rc.id)}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                    >
+                      <Trash2 size={16} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                  <div className="pt-3 border-t border-gray-50 flex items-center justify-between">
+                    <div>
+                      <div className="text-[9px] font-extrabold uppercase tracking-widest text-[#a57b3f]/70 mb-1">Surplus Logged</div>
+                      <div className="font-black tabular-nums text-[#8c6530] text-[16px]">{fmtKg(rc.gapcha_weight)}</div>
+                    </div>
+                    {rc.note && <div className="text-[12px] font-medium text-gray-400 italic text-right max-w-[60%]">"{rc.note}"</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* ── Record Gapcha Sale Modal ────────────────────────────── */}
       {isSaleOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-xl p-5 bg-white border border-[var(--color-border)] shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--color-border-soft)]">
-              <h3
-                className="text-base font-bold flex items-center gap-2"
-                style={{ fontFamily: 'var(--font-display)', color: 'var(--color-ink)' }}
-              >
-                <Scale size={18} className="text-[var(--color-brass)]" />
-                Record Gapcha Sale
-              </h3>
-              <button
-                type="button"
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-md sm:items-center sm:justify-center p-0 sm:p-4 transition-all">
+          <div className="bg-[#fcfcfb] w-full sm:w-[500px] rounded-t-[24px] sm:rounded-3xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:slide-in-from-bottom-6 duration-400 ease-out max-h-[90dvh] overflow-y-auto">
+            <div className="flex justify-center pt-3 pb-1 bg-white shrink-0 sticky top-0 z-10">
+              <div className="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+            </div>
+            
+            <div className="px-6 pb-4 pt-2 bg-white flex justify-between items-start shrink-0 sticky top-[20px] z-10 border-b border-gray-100">
+              <div>
+                <p className="text-[10px] font-extrabold tracking-widest text-[#a57b3f]/70 uppercase mb-1.5">
+                  NEW SALE
+                </p>
+                <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                  Record Gapcha Sale
+                </h2>
+              </div>
+              <button 
                 onClick={() => setIsSaleOpen(false)}
-                className="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] cursor-pointer font-semibold"
+                className="p-2 -mr-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 transition-colors cursor-pointer"
               >
-                ✕ Close
+                <X size={20} strokeWidth={2.5} />
               </button>
             </div>
 
-            <form onSubmit={submitSale} className="pt-3 space-y-3">
-              <Field label="Buyer / Customer Name *">
-                <TextInput
-                  required
-                  placeholder="e.g. Ramesh Bhai / Local Trader"
-                  value={saleForm.buyerName}
-                  onChange={(e) => setSaleForm({ ...saleForm, buyerName: e.target.value })}
-                />
-              </Field>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Date *">
-                  <TextInput
-                    type="date"
+            <form onSubmit={submitSale} className="p-6 bg-[#fcfcfb] space-y-5">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Buyer Name *</label>
+                  <input
                     required
-                    value={saleForm.date}
-                    onChange={(e) => setSaleForm({ ...saleForm, date: e.target.value })}
+                    placeholder="e.g. Ramesh Bhai"
+                    className="w-full h-[48px] px-4 bg-white border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                    value={saleForm.buyerName}
+                    onChange={(e) => setSaleForm({ ...saleForm, buyerName: e.target.value })}
                   />
-                </Field>
+                </div>
 
-                <Field label="Origin Party (Optional)">
-                  <Select
-                    value={saleForm.partyId}
-                    onChange={(e) => setSaleForm({ ...saleForm, partyId: e.target.value })}
-                  >
-                    <option value="">-- General Stock --</option>
-                    {parties.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <Field label="Weight (kg or g) *">
-                  <TextInput
-                    required
-                    type="number"
-                    step="any"
-                    placeholder="e.g. 5.500"
-                    value={saleForm.weightGrams}
-                    onChange={(e) => setSaleForm({ ...saleForm, weightGrams: e.target.value })}
-                  />
-                </Field>
-
-                <Field label="Rate (₹/kg)">
-                  <TextInput
-                    type="number"
-                    step="any"
-                    placeholder="e.g. 250"
-                    value={saleForm.ratePerKg}
-                    onChange={(e) => setSaleForm({ ...saleForm, ratePerKg: e.target.value })}
-                  />
-                </Field>
-
-                <Field label="Total Amount">
-                  <div className="h-9 px-3 flex items-center rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] text-xs font-bold tabular-nums text-[var(--color-brass)]">
-                    {saleAmount !== null ? fmtMoney(saleAmount) : '—'}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Date *</label>
+                    <input
+                      type="date"
+                      required
+                      className="w-full h-[48px] px-4 bg-white border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                      value={saleForm.date}
+                      onChange={(e) => setSaleForm({ ...saleForm, date: e.target.value })}
+                    />
                   </div>
-                </Field>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Origin Party</label>
+                    <select
+                      className="w-full h-[48px] px-4 bg-white border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm appearance-none cursor-pointer"
+                      value={saleForm.partyId}
+                      onChange={(e) => setSaleForm({ ...saleForm, partyId: e.target.value })}
+                    >
+                      <option value="">-- General Stock --</option>
+                      {parties.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Weight (kg/g) *</label>
+                    <input
+                      required
+                      type="number"
+                      step="any"
+                      placeholder="5.500"
+                      className="w-full h-[48px] px-4 bg-[#a57b3f]/10 border border-[#a57b3f]/30 rounded-[14px] text-[16px] font-black tabular-nums text-[#8c6530] placeholder:text-[#a57b3f]/40 focus:outline-none focus:bg-white focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                      value={saleForm.weightGrams}
+                      onChange={(e) => setSaleForm({ ...saleForm, weightGrams: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Rate (₹/kg)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="250"
+                      className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[16px] font-black tabular-nums text-gray-900 focus:outline-none focus:bg-white focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                      value={saleForm.ratePerKg}
+                      onChange={(e) => setSaleForm({ ...saleForm, ratePerKg: e.target.value })}
+                    />
+                  </div>
+                </div>
+                
+                {saleAmount !== null && (
+                  <div className="rounded-[14px] p-4 bg-emerald-50 border border-emerald-100 flex items-center justify-between">
+                    <span className="text-[11px] font-extrabold uppercase tracking-widest text-emerald-600/70">Total Revenue</span>
+                    <span className="text-[20px] font-black tabular-nums text-emerald-600">{fmtMoney(saleAmount)}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Notes</label>
+                  <input
+                    placeholder="e.g. Cash payment received"
+                    className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                    value={saleForm.note}
+                    onChange={(e) => setSaleForm({ ...saleForm, note: e.target.value })}
+                  />
+                </div>
               </div>
 
-              <Field label="Notes / Reference">
-                <TextInput
-                  placeholder="e.g. Cash payment received"
-                  value={saleForm.note}
-                  onChange={(e) => setSaleForm({ ...saleForm, note: e.target.value })}
-                />
-              </Field>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--color-border-soft)]">
-                <Button
+              <div className="pt-4 flex gap-4">
+                <button
                   type="button"
-                  variant="ghost"
                   onClick={() => setIsSaleOpen(false)}
                   disabled={saving}
+                  className="flex-1 py-4 rounded-[14px] font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 transition-colors cursor-pointer"
                 >
                   Cancel
-                </Button>
-                <Button type="submit" disabled={saving}>
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-[2] py-4 rounded-[14px] font-black text-white bg-gradient-to-b from-[#b88f4b] to-[#a57b3f] hover:from-[#c29a56] hover:to-[#b38848] shadow-[0_4px_12px_rgba(165,123,63,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer border border-[#a57b3f]/50"
+                >
                   {saving ? 'Saving...' : 'Save Sale'}
-                </Button>
+                </button>
               </div>
             </form>
           </div>
@@ -834,88 +701,102 @@ export default function Gapcha() {
 
       {/* ── Log Tare Surplus Modal ──────────────────────────────── */}
       {isSurplusOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-xl p-5 bg-white border border-[var(--color-border)] shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--color-border-soft)]">
-              <h3
-                className="text-base font-bold flex items-center gap-2"
-                style={{ fontFamily: 'var(--font-display)', color: 'var(--color-ink)' }}
-              >
-                <Sparkles size={18} className="text-[var(--color-brass)]" />
-                Log Legitimate Tare Surplus (Gapcha)
-              </h3>
-              <button
-                type="button"
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-md sm:items-center sm:justify-center p-0 sm:p-4 transition-all">
+          <div className="bg-[#fcfcfb] w-full sm:w-[480px] rounded-t-[24px] sm:rounded-3xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:slide-in-from-bottom-6 duration-400 ease-out">
+            <div className="flex justify-center pt-3 pb-1 bg-white shrink-0 sticky top-0 z-10">
+              <div className="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+            </div>
+            
+            <div className="px-6 pb-4 pt-2 bg-white flex justify-between items-start shrink-0 sticky top-[20px] z-10 border-b border-gray-100">
+              <div>
+                <p className="text-[10px] font-extrabold tracking-widest text-[#a57b3f]/70 uppercase mb-1.5">
+                  NEW LOG
+                </p>
+                <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                  Log Tare Surplus
+                </h2>
+              </div>
+              <button 
                 onClick={() => setIsSurplusOpen(false)}
-                className="text-xs text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] cursor-pointer font-semibold"
+                className="p-2 -mr-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 transition-colors cursor-pointer"
               >
-                ✕ Close
+                <X size={20} strokeWidth={2.5} />
               </button>
             </div>
 
-            <form onSubmit={submitSurplus} className="pt-3 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Party *">
-                  <Select
+            <form onSubmit={submitSurplus} className="p-6 bg-[#fcfcfb] space-y-5">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Party *</label>
+                  <select
                     required
+                    className="w-full h-[48px] px-4 bg-white border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm appearance-none cursor-pointer"
                     value={surplusForm.partyId}
                     onChange={(e) => setSurplusForm({ ...surplusForm, partyId: e.target.value })}
                   >
                     {parties.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
+                      <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
-                  </Select>
-                </Field>
+                  </select>
+                </div>
 
-                <Field label="Date *">
-                  <TextInput
-                    type="date"
-                    required
-                    value={surplusForm.date}
-                    onChange={(e) => setSurplusForm({ ...surplusForm, date: e.target.value })}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Date *</label>
+                    <input
+                      type="date"
+                      required
+                      className="w-full h-[48px] px-4 bg-white border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                      value={surplusForm.date}
+                      onChange={(e) => setSurplusForm({ ...surplusForm, date: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Weight (kg/g) *</label>
+                    <input
+                      required
+                      type="number"
+                      step="any"
+                      placeholder="1.250"
+                      className="w-full h-[48px] px-4 bg-[#a57b3f]/10 border border-[#a57b3f]/30 rounded-[14px] text-[16px] font-black tabular-nums text-[#8c6530] placeholder:text-[#a57b3f]/40 focus:outline-none focus:bg-white focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                      value={surplusForm.weightGrams}
+                      onChange={(e) => setSurplusForm({ ...surplusForm, weightGrams: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Notes</label>
+                  <input
+                    placeholder="e.g. 200g rola vs 70g bungri tare surplus"
+                    className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-[#a57b3f] focus:ring-4 focus:ring-[#a57b3f]/10 transition-all shadow-sm"
+                    value={surplusForm.note}
+                    onChange={(e) => setSurplusForm({ ...surplusForm, note: e.target.value })}
                   />
-                </Field>
+                </div>
               </div>
 
-              <Field label="Surplus Weight (kg or grams) *">
-                <TextInput
-                  required
-                  type="number"
-                  step="any"
-                  placeholder="e.g. 1.250 (or 1250 for grams)"
-                  value={surplusForm.weightGrams}
-                  onChange={(e) => setSurplusForm({ ...surplusForm, weightGrams: e.target.value })}
-                />
-              </Field>
-
-              <Field label="Notes / Lot Reference">
-                <TextInput
-                  placeholder="e.g. 200g rola vs 70g bungri tare surplus from Lot 1"
-                  value={surplusForm.note}
-                  onChange={(e) => setSurplusForm({ ...surplusForm, note: e.target.value })}
-                />
-              </Field>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--color-border-soft)]">
-                <Button
+              <div className="pt-4 flex gap-4">
+                <button
                   type="button"
-                  variant="ghost"
                   onClick={() => setIsSurplusOpen(false)}
                   disabled={saving}
+                  className="flex-1 py-4 rounded-[14px] font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 transition-colors cursor-pointer"
                 >
                   Cancel
-                </Button>
-                <Button type="submit" disabled={saving}>
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-[2] py-4 rounded-[14px] font-black text-white bg-gradient-to-b from-gray-900 to-gray-800 hover:from-gray-800 hover:to-gray-700 shadow-[0_4px_12px_rgba(0,0,0,0.2)] transition-all flex items-center justify-center gap-2 cursor-pointer border border-gray-700"
+                >
                   {saving ? 'Logging...' : 'Log Surplus'}
-                </Button>
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
       {/* ── Confirm Delete Sale Modal ───────────────────────────── */}
       {deletingSaleId && (
         <ConfirmDelete

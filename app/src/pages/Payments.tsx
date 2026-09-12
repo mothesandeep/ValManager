@@ -1,27 +1,22 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Check } from 'lucide-react'
-import {
-  fetchParties,
-  fetchPayments,
-  fetchDispatches,
-  insertPayment,
-  updatePayment,
-  deletePayment,
-  type PaymentPayload,
-} from '../lib/queries'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Plus, Pencil, Trash2, Check, X } from 'lucide-react'
+import { fetchParties } from '../lib/api/parties'
+import { fetchPayments, insertPayment, updatePayment, deletePayment, type PaymentPayload } from '../lib/api/payments'
+import { fetchDispatches } from '../lib/api/dispatch'
+
+
 import type { Party, PaymentWithParty } from '../types'
 import { fmtDate, fmtMoney, todayStr } from '../types'
-import {
-  SectionHeader,
-  KpiCard,
-  Button,
-  Field,
-  TextInput,
-  Select,
-  Table,
-  EmptyState,
-  ConfirmDelete,
-} from '../components/ui/UIComponents'
+import { SectionHeader } from '../components/ui/SectionHeader'
+import { KpiCard } from '../components/ui/KpiCard'
+import { Button } from '../components/ui/Button'
+import { Field } from '../components/ui/Field'
+import { TextInput } from '../components/ui/TextInput'
+import { Select } from '../components/ui/Select'
+import { Table } from '../components/ui/Table'
+import { EmptyState } from '../components/ui/EmptyState'
+import { ConfirmDelete } from '../components/ui/ConfirmDelete'
 import { useMonth } from '../context/MonthContext'
 
 interface PaymentFormState {
@@ -33,6 +28,8 @@ interface PaymentFormState {
 }
 
 export default function Payments() {
+    const hasAutoOpened = useRef(false)
+const [searchParams, setSearchParams] = useSearchParams()
   const { filterByMonth, formattedMonth } = useMonth()
   const [parties, setParties] = useState<Party[]>([])
   const [payments, setPayments] = useState<PaymentWithParty[]>([])
@@ -88,12 +85,6 @@ export default function Payments() {
     void loadData()
   }, [loadData])
 
-  const filteredPayments = filterByMonth(payments)
-  const monthCollectedTotal = filteredPayments.reduce(
-    (s, p) => s + (Number(p.amount) || 0),
-    0
-  )
-
   const blankForm = (initialPartyId?: string): PaymentFormState => ({
     id: null,
     partyId: initialPartyId || parties[0]?.id || '',
@@ -102,11 +93,21 @@ export default function Payments() {
     note: '',
   })
 
-  const startAdd = () => {
+  const startAdd = useCallback(() => {
     setForm(blankForm())
     setErrorMsg(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+  }, [parties])
+
+  // Auto open form if navigated from Dashboard Quick Action (+ Paisa)
+  useEffect(() => {
+    if (searchParams.get('action') === 'new' && parties.length > 0 && !form) {
+      startAdd()
+      const newParams = new URLSearchParams(searchParams)
+      newParams.delete('action')
+      setSearchParams(newParams, { replace: true })
+    }
+  }, [searchParams, parties, form, startAdd, setSearchParams])
 
   const edit = (p: PaymentWithParty) => {
     setForm({
@@ -169,47 +170,48 @@ export default function Payments() {
     }
   }
 
+  const filteredPayments = filterByMonth(payments)
+  const monthCollectedTotal = filteredPayments.reduce(
+    (s, p) => s + (Number(p.amount) || 0),
+    0
+  )
+
   return (
     <div className="space-y-5">
       <SectionHeader
         title="Payments"
-        subtitle="Log money received against dispatched Val"
-        action={
-          !form &&
-          parties.length > 0 && (
-            <Button onClick={startAdd}>
-              <Plus size={16} /> Log Payment
-            </Button>
-          )
-        }
+        subtitle="Log party payments, manage receivables, and track balances"
       />
 
       {/* ── Month Summary KPI ─────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <KpiCard
-          label="Total Collected"
-          value={fmtMoney(monthCollectedTotal)}
-          sub={formattedMonth}
-          tone="positive"
-          loading={loading}
-        />
-        <KpiCard
-          label="Payments Logged"
-          value={filteredPayments.length}
-          sub="entries recorded"
-          loading={loading}
-        />
-      </div>
+      {!form && (
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="rounded-[20px] p-4.5 bg-emerald-50/50 shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-emerald-100/50 transition-all">
+            <div className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-600/70 mb-2">Total Collected</div>
+            <div className="text-[22px] font-black tabular-nums leading-none tracking-tight text-emerald-700 mb-1.5">
+              {fmtMoney(monthCollectedTotal)}
+            </div>
+            <div className="text-[10px] font-bold text-emerald-600/50">{formattedMonth}</div>
+          </div>
+          <div className="rounded-[20px] p-4.5 bg-white shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100/80 transition-all">
+            <div className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-2">Payments Logged</div>
+            <div className="text-[22px] font-black tabular-nums leading-none tracking-tight text-gray-900 mb-1.5">
+              {filteredPayments.length} <span className="text-[14px] text-gray-400 font-bold tracking-normal">entries</span>
+            </div>
+            <div className="text-[10px] font-medium text-gray-400">{formattedMonth}</div>
+          </div>
+        </div>
+      )}
 
       {errorMsg && (
         <div
-          className="rounded-lg p-3 mb-4 text-xs font-medium flex items-center justify-between"
+          className="rounded-lg p-3 mb-4 text-xs font-medium flex items-center justify-between shadow-xs"
           style={{ background: 'var(--color-due-bg)', color: 'var(--color-due)' }}
         >
           <span>{errorMsg}</span>
           <button
             onClick={() => setErrorMsg(null)}
-            className="underline cursor-pointer"
+            className="underline cursor-pointer font-semibold"
           >
             Dismiss
           </button>
@@ -217,184 +219,222 @@ export default function Payments() {
       )}
 
       {/* ── Balance Summary Cards Grid ───────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
-        {partyBalances.length === 0 && !loading && (
-          <div className="col-span-full">
-            <EmptyState text="No receivables yet — record a dispatch with an amount first." />
-          </div>
-        )}
-        {partyBalances.map((r) => (
-          <div
-            key={r.party.id}
-            className="rounded-lg p-4"
-            style={{
-              background: 'var(--color-card)',
-              border: '1px solid var(--color-border)',
-            }}
-          >
-            <h3
-              className="font-semibold mb-2"
-              style={{
-                fontFamily: 'var(--font-display)',
-                color: 'var(--color-ink)',
-              }}
-            >
-              {r.party.name}
-            </h3>
-            <div className="flex justify-between text-sm mb-1">
-              <span style={{ color: 'var(--color-ink-soft)' }}>Receivable</span>
-              <span className="tabular-nums font-medium">{fmtMoney(r.receivable)}</span>
-            </div>
-            <div className="flex justify-between text-sm mb-1">
-              <span style={{ color: 'var(--color-ink-soft)' }}>Received</span>
-              <span className="tabular-nums font-medium">{fmtMoney(r.received)}</span>
-            </div>
-            <div
-              className="flex justify-between text-sm pt-2 mt-1"
-              style={{ borderTop: '1px solid var(--color-border-soft)' }}
-            >
-              <span style={{ color: 'var(--color-ink-soft)' }}>Balance due</span>
-              <span
-                className="tabular-nums font-semibold"
-                style={{
-                  color:
-                    r.balance > 0
-                      ? 'var(--color-due)'
-                      : r.balance < 0
-                      ? 'var(--color-positive)'
-                      : 'var(--color-ink)',
-                }}
+      {!form && (
+        <div className="mb-8">
+          <h2 className="text-xs font-extrabold uppercase tracking-widest text-gray-400 mb-4 pl-1">Party Balances</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {partyBalances.length === 0 && !loading && (
+              <div className="col-span-full">
+                <EmptyState text="No receivables yet — record a dispatch with an amount first." />
+              </div>
+            )}
+            {partyBalances.map((r) => (
+              <div
+                key={r.party.id}
+                className="rounded-[24px] p-5 bg-white border border-gray-100/80 shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.08)] transition-all"
               >
-                {fmtMoney(r.balance)}
-              </span>
-            </div>
+                <h3 className="font-extrabold text-[16px] mb-4 text-gray-900 tracking-tight">
+                  {r.party.name}
+                </h3>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Total Billed</span>
+                    <span className="tabular-nums font-black text-gray-600">{fmtMoney(r.receivable)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Received</span>
+                    <span className="tabular-nums font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">{fmtMoney(r.received)}</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-end pt-4 mt-4 border-t border-gray-100">
+                  <span className="text-[11px] font-extrabold uppercase tracking-widest text-gray-400">Balance Due</span>
+                  <span
+                    className={`tabular-nums font-black text-[18px] leading-none tracking-tight ${
+                      r.balance > 0
+                        ? 'text-red-500'
+                        : r.balance < 0
+                        ? 'text-emerald-500'
+                        : 'text-gray-900'
+                    }`}
+                  >
+                    {fmtMoney(r.balance)}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-
-      {/* ── Add / Edit Form ──────────────────────────────────────── */}
-      {form && (
-        <form
-          onSubmit={submit}
-          className="mb-5 p-4 rounded-lg grid grid-cols-2 sm:grid-cols-4 gap-3"
-          style={{
-            background: 'var(--color-card)',
-            border: '1px solid var(--color-border)',
-          }}
-        >
-          <Field label="Party *">
-            <Select
-              required
-              value={form.partyId}
-              onChange={(e) => setForm({ ...form, partyId: e.target.value })}
-            >
-              {parties.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <Field label="Date">
-            <TextInput
-              type="date"
-              required
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
-            />
-          </Field>
-
-          <Field label="Amount Received (₹) *">
-            <TextInput
-              required
-              type="number"
-              step="0.01"
-              placeholder="e.g. 5000"
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            />
-          </Field>
-
-          <Field label="Note">
-            <TextInput
-              placeholder="e.g. GPay / Cash / Cheque"
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-            />
-          </Field>
-
-          <div className="flex gap-2 items-end pt-1 col-span-2 sm:col-span-1">
-            <Button type="submit" disabled={saving}>
-              <Check size={16} /> {saving ? 'Saving…' : 'Save'}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setForm(null)}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-          </div>
-        </form>
+        </div>
       )}
 
-      {/* ── Table View ───────────────────────────────────────────── */}
-      <Table
-        columns={['Date', 'Party', 'Amount', 'Note', '']}
-        rows={filteredPayments}
-        emptyText={`No payments logged for ${formattedMonth}.`}
-        renderRow={(p) => (
-          <tr
-            key={p.id}
-            style={{ borderTop: '1px solid var(--color-border-soft)' }}
-          >
-            <td className="px-3 py-2 whitespace-nowrap">{fmtDate(p.date)}</td>
-            <td className="px-3 py-2 font-medium whitespace-nowrap">
-              {p.party?.name ?? '—'}
-            </td>
-            <td
-              className="px-3 py-2 tabular-nums font-semibold"
-              style={{ color: 'var(--color-positive)' }}
-            >
-              {fmtMoney(p.amount)}
-            </td>
-            <td className="px-3 py-2" style={{ color: 'var(--color-ink-soft)' }}>
-              {p.note || '—'}
-            </td>
-            <td className="px-3 py-2 text-right whitespace-nowrap">
-              <button
-                type="button"
-                onClick={() => edit(p)}
-                className="p-1 cursor-pointer"
-                style={{ color: 'var(--color-ink-soft)' }}
-                title="Edit payment"
-                aria-label="Edit payment"
+      {/* ── Payments List (Table replaced with premium list) ───────────────────────────────────────────── */}
+      {!form && (
+        <div className="pb-28">
+          <h2 className="text-xs font-extrabold uppercase tracking-widest text-gray-400 mb-4 pl-1">Recent Payments</h2>
+          {filteredPayments.length === 0 && !loading ? (
+            <EmptyState text={`No payments logged for ${formattedMonth}.`} />
+          ) : (
+            <div className="space-y-3">
+              {filteredPayments.map((p) => (
+                <div
+                  key={p.id}
+                  className="rounded-[20px] p-4 bg-white border border-gray-100/80 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between group transition-all hover:shadow-[0_4px_15px_rgba(0,0,0,0.04)]"
+                >
+                  <div className="flex flex-col">
+                    <span className="font-bold text-[15px] text-gray-900 tracking-tight">{p.party?.name ?? '—'}</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[11px] font-bold text-gray-400">{fmtDate(p.date)}</span>
+                      {p.note && (
+                        <>
+                          <span className="text-gray-300">·</span>
+                          <span className="text-[11px] font-medium text-gray-500">{p.note}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-[17px] font-black tabular-nums text-emerald-600 tracking-tight">
+                      +{fmtMoney(p.amount)}
+                    </span>
+                    <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => edit(p)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      {deleting === p.id ? (
+                        <ConfirmDelete
+                          onConfirm={() => handleDelete(p.id)}
+                          onCancel={() => setDeleting(null)}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setDeleting(p.id)}
+                          className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Add / Edit Form Modal ──────────────────────────────────────── */}
+      {form && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-md sm:items-center sm:justify-center p-0 sm:p-4 transition-all">
+          <div className="bg-[#fcfcfb] w-full sm:w-[480px] rounded-t-[24px] sm:rounded-3xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:slide-in-from-bottom-6 duration-400 ease-out">
+            <div className="flex justify-center pt-3 pb-1 bg-white">
+              <div className="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+            </div>
+            
+            <div className="px-6 pb-4 pt-2 bg-white flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-extrabold tracking-widest text-emerald-600/70 uppercase mb-1.5">
+                  {form.id ? 'EDIT PAYMENT' : 'NEW PAYMENT'}
+                </p>
+                <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                  Log Received Amount
+                </h2>
+              </div>
+              <button 
+                onClick={() => setForm(null)}
+                className="p-2 -mr-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 transition-colors cursor-pointer"
               >
-                <Pencil size={14} />
+                <X size={20} strokeWidth={2.5} />
               </button>
-              {deleting === p.id ? (
-                <ConfirmDelete
-                  onConfirm={() => handleDelete(p.id)}
-                  onCancel={() => setDeleting(null)}
-                />
-              ) : (
+            </div>
+
+            <form onSubmit={submit} className="p-6 bg-[#fcfcfb] space-y-5">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Party *</label>
+                  <select
+                    required
+                    value={form.partyId}
+                    onChange={(e) => setForm({ ...form, partyId: e.target.value })}
+                    className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all appearance-none cursor-pointer shadow-sm"
+                  >
+                    {parties.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Amount (₹) *</label>
+                    <input
+                      required
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 5000"
+                      className="w-full h-[48px] px-4 bg-emerald-50/30 border border-emerald-200/50 rounded-[14px] text-[16px] font-black tabular-nums text-emerald-700 placeholder:text-emerald-700/30 focus:outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-sm"
+                      value={form.amount}
+                      onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex-[0.8]">
+                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Date</label>
+                    <input
+                      type="date"
+                      required
+                      className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-sm"
+                      value={form.date}
+                      onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Note (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. GPay / Cash / Cheque"
+                    className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-sm"
+                    value={form.note}
+                    onChange={(e) => setForm({ ...form, note: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-4">
                 <button
                   type="button"
-                  onClick={() => setDeleting(p.id)}
-                  className="p-1 cursor-pointer"
-                  style={{ color: 'var(--color-due)' }}
-                  title="Delete payment"
-                  aria-label="Delete payment"
+                  onClick={() => setForm(null)}
+                  disabled={saving}
+                  className="flex-1 py-4 rounded-[14px] font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 transition-colors cursor-pointer"
                 >
-                  <Trash2 size={14} />
+                  Cancel
                 </button>
-              )}
-            </td>
-          </tr>
-        )}
-      />
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-[2] py-4 rounded-[14px] font-black text-white bg-gradient-to-b from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 shadow-[0_4px_12px_rgba(16,185,129,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer border border-emerald-600/50"
+                >
+                  {saving ? 'Saving...' : 'Save Payment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Button */}
+      {!form && parties.length > 0 && (
+        <button
+          onClick={startAdd}
+          className="fixed bottom-[80px] right-5 sm:right-8 bg-gradient-to-b from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white px-6 py-4 rounded-full shadow-[0_8px_30px_-8px_rgba(16,185,129,0.5)] hover:shadow-[0_12px_40px_-8px_rgba(16,185,129,0.6)] flex items-center gap-2.5 font-black transition-all active:scale-95 z-40 border border-emerald-400/50 hover:-translate-y-1"
+        >
+          <Plus size={22} strokeWidth={3} /> <span className="tracking-wide">Log Payment</span>
+        </button>
+      )}
     </div>
   )
 }

@@ -3,19 +3,25 @@ import type { Receipt, Dispatch, GapchaSale, GapchaReconciliation, OverallGapcha
 // ── Standard constants ────────────────────────────────────────────────────────
 export const STANDARD_BUNGARI_WEIGHT_G = 70
 export const STANDARD_ROLA_WEIGHT_G = 200
+export const STANDARD_BORI_WEIGHT_G = 100 // 1 bori = 100g (0.100 kg)
 
 /**
- * Net weight for raw Kasab receiving using fixed assumed tare weight per rola.
- * Formula: grossKg - (rolaCount * perRolaGrams / 1000)
+ * Net weight for raw Kasab receiving using fixed assumed tare weight per rola + bori weight (100g per bori).
+ * Formula: grossKg - ((rolaCount * perRolaGrams + boriCount * boriWeightG) / 1000)
  */
 export function calcReceiptNetWeight(
   grossKg: number,
   rolaCount: number,
-  perRolaGrams: number = STANDARD_ROLA_WEIGHT_G
+  perRolaGrams: number = STANDARD_ROLA_WEIGHT_G,
+  boriCount: number = 1,
+  boriWeightG: number = STANDARD_BORI_WEIGHT_G
 ): number {
   const g = Number(grossKg) || 0
   const r = Number(rolaCount) || 0
-  const tare = (r * (Number(perRolaGrams) || STANDARD_ROLA_WEIGHT_G)) / 1000
+  const b = Number(boriCount) || 0
+  const rolaTareG = r * (Number(perRolaGrams) || STANDARD_ROLA_WEIGHT_G)
+  const boriTareG = b * (Number(boriWeightG) || STANDARD_BORI_WEIGHT_G)
+  const tare = (rolaTareG + boriTareG) / 1000
   return Math.max(0, g - tare)
 }
 
