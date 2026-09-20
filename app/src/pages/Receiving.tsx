@@ -97,6 +97,20 @@ export default function Receiving() {
 
   const filteredReceipts = filterByMonth(receipts)
 
+  // ── Party filter (applied after month filter) ────────────────────────────
+  const [partyFilter, setPartyFilter] = useState<string | null>(null)
+
+  const partiesInView = useMemo(() => {
+    const ids = new Set(filteredReceipts.map((r) => r.party_id))
+    return parties.filter((p) => ids.has(p.id))
+  }, [filteredReceipts, parties])
+
+  const displayReceipts = useMemo(
+    () => partyFilter ? filteredReceipts.filter((r) => r.party_id === partyFilter) : filteredReceipts,
+    [filteredReceipts, partyFilter]
+  )
+  // ─────────────────────────────────────────────────────────────────────────
+
   const monthNet = filteredReceipts.reduce((s, r) => s + (Number(r.net_weight) || 0), 0)
   const monthRola = filteredReceipts.reduce((s, r) => s + (Number(r.rola_count) || 0), 0)
 
@@ -349,7 +363,7 @@ export default function Receiving() {
       hasBig: boolean
     }> = {}
 
-    filteredReceipts.forEach(r => {
+    displayReceipts.forEach(r => {
       const key = `${r.challan_no || 'NO_CH'}_${r.party?.name || 'Unknown'}_${r.date}`
       if (!groups[key]) {
         groups[key] = {
@@ -387,7 +401,7 @@ export default function Receiving() {
     })
 
     return Object.values(groups).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  }, [filteredReceipts])
+  }, [displayReceipts, parties])
 
 
 
@@ -432,6 +446,39 @@ export default function Receiving() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Party Filter Pills ── */}
+      {!isOpen && partiesInView.length > 1 && (
+        <div className="relative mb-6">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-2 px-2 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <button
+              type="button"
+              onClick={() => setPartyFilter(null)}
+              className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-black tracking-tight transition-all cursor-pointer shadow-sm ${
+                partyFilter === null
+                  ? 'bg-gradient-to-r from-[#b58c50] to-[#997036] text-white border-transparent shadow-[0_4px_12px_rgba(165,123,63,0.25)]'
+                  : 'bg-white text-gray-500 border border-gray-200 hover:border-[#a57b3f] hover:text-[#a57b3f]'
+              }`}
+            >
+              All Parties
+            </button>
+            {partiesInView.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPartyFilter(p.id === partyFilter ? null : p.id)}
+                className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-black tracking-tight transition-all cursor-pointer shadow-sm ${
+                  partyFilter === p.id
+                    ? 'bg-gradient-to-r from-[#b58c50] to-[#997036] text-white border-transparent shadow-[0_4px_12px_rgba(165,123,63,0.25)]'
+                    : 'bg-white text-gray-500 border border-gray-200 hover:border-[#a57b3f] hover:text-[#a57b3f]'
+                }`}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
