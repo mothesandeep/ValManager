@@ -12,7 +12,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Kasab Val Manager',
+        name: 'ValManager',
         short_name: 'KasabVal',
         description: 'Job-work tracker for Kasab Val production — parties, receiving, production, dispatch, payments.',
         theme_color: '#A6752B',

@@ -65,7 +65,7 @@ export function shareDispatchSlip(d: DispatchWithParty, party?: Party | null) {
       `\n*ROLA / KALI DISPATCH*\n\n` +
       `Total Weight: ${gross.toFixed(3)} kg\n` +
       (rolaCount > 0 ? `Rola Count: ${rolaCount} pcs\n` : '') +
-      `\n_Sent via Kasab Val Manager_`
+      `\n_Sent via ValManager_`
   } else {
     const gross = Number(d.bore_gross_weight) || 0
     const bungariCount = Number(d.bungari_count) || 0
@@ -101,7 +101,7 @@ export function shareDispatchSlip(d: DispatchWithParty, party?: Party | null) {
     }
 
     text += `\n*TOTAL AMOUNT: ₹${amount.toLocaleString('en-IN')}*\n\n` +
-      `_Sent via Kasab Val Manager_`
+      `_Sent via ValManager_`
   }
 
   openWhatsApp(text, party?.phone)
@@ -160,7 +160,7 @@ export function shareReceiptSlip(r: ReceiptWithParty, party?: Party | null) {
     `= *${netKasab.toFixed(3)} kg*\n\n` +
     `*ROLA*\n\n` +
     `Rola Received: ${rolaCount} pcs${isBig ? ' (Big Rola)' : ''}\n\n` +
-    `_Sent via Kasab Val Manager_`
+    `_Sent via ValManager_`
 
   openWhatsApp(text, party?.phone)
 }
@@ -205,7 +205,7 @@ export function shareChallanReceiptSlip(
     `⚖️ Total Gross: ${totalGross.toFixed(3)} kg\n` +
     `🔄 Total Tare: -${totalTare.toFixed(3)} kg (${totalRola} rolas + ${entries.length} bori)\n` +
     `✨ *TOTAL NET KASAB: ${totalNet.toFixed(3)} kg*\n\n` +
-    `_Sent via Kasab Val Manager_`
+    `_Sent via ValManager_`
 
   openWhatsApp(text, party?.phone)
 }
@@ -234,7 +234,7 @@ export function sharePartyKhata(party: Party, stats: PartyStats) {
     `🔴 *BAAKI RAKAM: ₹${stats.balance.toLocaleString('en-IN')}*\n` +
     `🔄 *ROLA BAAKI: ${stats.rolaPending} pcs*\n` +
     `--------------------------------\n\n` +
-    `_Sent via Kasab Val Manager_`
+    `_Sent via ValManager_`
 
   openWhatsApp(text, party.phone)
 }

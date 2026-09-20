@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.kasabval.manager',
-  appName: 'Kasab Val Manager',
+  appName: 'ValManager',
   webDir: 'dist'
 };
 
