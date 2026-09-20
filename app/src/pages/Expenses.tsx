@@ -1,17 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Check, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, X } from 'lucide-react'
 import { fetchExpenses, insertExpense, updateExpense, deleteExpense, type ExpensePayload } from '../lib/api/expenses'
 
 
-import type { Expense } from '../types'
-import { EXPENSE_CATEGORIES, fmtDate, fmtMoney, todayStr } from '../types'
-import { SectionHeader } from '../components/ui/SectionHeader'
-import { KpiCard } from '../components/ui/KpiCard'
+import type { Expense } from '../features/expenses/types'
+import { EXPENSE_CATEGORIES } from '../features/expenses/constants'
+import { fmtDate, todayStr } from '../utils/date'
+import { fmtMoney } from '../utils/format'
+import { PageHeader } from '../components/ui/PageHeader'
 import { Button } from '../components/ui/Button'
-import { Field } from '../components/ui/Field'
-import { TextInput } from '../components/ui/TextInput'
-import { Select } from '../components/ui/Select'
-import { Table } from '../components/ui/Table'
 import { ConfirmDelete } from '../components/ui/ConfirmDelete'
 import { EmptyState } from '../components/ui/EmptyState'
 import { useMonth } from '../context/MonthContext'
@@ -134,27 +131,36 @@ export default function Expenses() {
 
   return (
     <div className="space-y-5">
-      <SectionHeader
+      <PageHeader
         title="Expenses"
-        subtitle="Operational costs — rent, repairs, transport & utilities"
+        description="Operational costs — rent, repairs, transport & utilities"
+        actions={
+          !form && (
+            <div className="hidden sm:block">
+              <Button onClick={startAdd} className="bg-red-600 hover:bg-red-700 text-white">
+                <Plus size={18} strokeWidth={2.5} /> Log Expense
+              </Button>
+            </div>
+          )
+        }
       />
 
       {/* ── Month Summary KPIs ────────────────────────────────────── */}
       {!form && (
         <div className="grid grid-cols-2 gap-4 mb-8">
-          <div className="rounded-[20px] p-4.5 bg-red-50/50 shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-red-100/50 transition-all">
-            <div className="text-[9px] font-extrabold uppercase tracking-widest text-red-600/70 mb-2">Total Expenses</div>
-            <div className="text-[22px] font-black tabular-nums leading-none tracking-tight text-red-700 mb-1.5">
+          <div className="rounded-[var(--radius-xl)] p-5 bg-[var(--color-negative-bg)] shadow-[var(--shadow-sm)] border border-red-100/50 transition-all">
+            <div className="text-[10px] font-extrabold uppercase tracking-widest text-red-600/70 mb-2">Total Expenses</div>
+            <div className="text-[24px] font-black tabular-nums leading-none tracking-tight text-[var(--color-negative)] mb-1.5">
               {fmtMoney(monthExpenseTotal)}
             </div>
             <div className="text-[10px] font-bold text-red-600/50">{formattedMonth}</div>
           </div>
-          <div className="rounded-[20px] p-4.5 bg-white shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100/80 transition-all">
-            <div className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-2">Expense Count</div>
-            <div className="text-[22px] font-black tabular-nums leading-none tracking-tight text-gray-900 mb-1.5">
-              {filteredExpenses.length} <span className="text-[14px] text-gray-400 font-bold tracking-normal">entries</span>
+          <div className="rounded-[var(--radius-xl)] p-5 bg-[var(--color-card)] shadow-[var(--shadow-sm)] border border-[var(--color-border)] transition-all">
+            <div className="text-[10px] font-extrabold uppercase tracking-widest text-[var(--color-ink-soft)] mb-2">Expense Count</div>
+            <div className="text-[24px] font-black tabular-nums leading-none tracking-tight text-[var(--color-ink)] mb-1.5">
+              {filteredExpenses.length} <span className="text-[14px] text-[var(--color-ink-soft)] font-bold tracking-normal">entries</span>
             </div>
-            <div className="text-[10px] font-medium text-gray-400">{formattedMonth}</div>
+            <div className="text-[10px] font-medium text-[var(--color-ink-soft)]">{formattedMonth}</div>
           </div>
         </div>
       )}
@@ -189,7 +195,7 @@ export default function Expenses() {
               {filteredExpenses.map((x) => (
                 <div
                   key={x.id}
-                  className="rounded-[20px] p-4 bg-white border border-gray-100/80 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between group transition-all hover:shadow-[0_4px_15px_rgba(0,0,0,0.04)]"
+                  className="rounded-[var(--radius-xl)] p-4 bg-[var(--color-card)] border border-[var(--color-border)] shadow-[var(--shadow-sm)] flex items-center justify-between group transition-all hover:shadow-[var(--shadow-md)]"
                 >
                   <div className="flex flex-col">
                     <span className="font-bold text-[15px] text-gray-900 tracking-tight">{x.category}</span>
@@ -240,18 +246,18 @@ export default function Expenses() {
 
       {/* ── Add / Edit Form Modal ──────────────────────────────────────── */}
       {form && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-md sm:items-center sm:justify-center p-0 sm:p-4 transition-all">
-          <div className="bg-[#fcfcfb] w-full sm:w-[480px] rounded-t-[24px] sm:rounded-3xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:slide-in-from-bottom-6 duration-400 ease-out">
-            <div className="flex justify-center pt-3 pb-1 bg-white">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 transition-all">
+          <div className="bg-[#fcfcfb] w-full sm:max-w-[480px] rounded-t-[24px] sm:rounded-2xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:zoom-in-95 duration-300 ease-out">
+            <div className="sm:hidden flex justify-center pt-3 pb-1 bg-white">
               <div className="w-12 h-1.5 bg-gray-200 rounded-full"></div>
             </div>
             
-            <div className="px-6 pb-4 pt-2 bg-white flex justify-between items-start">
+            <div className="px-6 pb-4 pt-4 sm:pt-6 bg-white flex justify-between items-start border-b border-gray-100 shrink-0">
               <div>
                 <p className="text-[10px] font-extrabold tracking-widest text-red-600/70 uppercase mb-1.5">
                   {form.id ? 'EDIT EXPENSE' : 'NEW EXPENSE'}
                 </p>
-                <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
                   Log Operating Cost
                 </h2>
               </div>
@@ -271,7 +277,7 @@ export default function Expenses() {
                     required
                     value={form.category}
                     onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all appearance-none cursor-pointer shadow-sm"
+                    className="w-full h-[48px] sm:h-[42px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] sm:rounded-xl text-[15px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all appearance-none cursor-pointer shadow-sm"
                   >
                     {EXPENSE_CATEGORIES.map((c) => (
                       <option key={c} value={c}>{c}</option>
@@ -287,7 +293,7 @@ export default function Expenses() {
                       type="number"
                       step="0.01"
                       placeholder="e.g. 1500"
-                      className="w-full h-[48px] px-4 bg-red-50/30 border border-red-200/50 rounded-[14px] text-[16px] font-black tabular-nums text-red-700 placeholder:text-red-700/30 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all shadow-sm"
+                      className="w-full h-[48px] sm:h-[42px] px-4 bg-red-50/30 border border-red-200/50 rounded-[14px] sm:rounded-xl text-[16px] sm:text-[15px] font-black tabular-nums text-red-700 placeholder:text-red-700/30 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all shadow-sm"
                       value={form.amount}
                       onChange={(e) => setForm({ ...form, amount: e.target.value })}
                     />
@@ -297,7 +303,7 @@ export default function Expenses() {
                     <input
                       type="date"
                       required
-                      className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all shadow-sm"
+                      className="w-full h-[48px] sm:h-[42px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] sm:rounded-xl text-[14px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all shadow-sm"
                       value={form.date}
                       onChange={(e) => setForm({ ...form, date: e.target.value })}
                     />
@@ -309,26 +315,26 @@ export default function Expenses() {
                   <input
                     type="text"
                     placeholder="e.g. Shop rent / Machine oil"
-                    className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all shadow-sm"
+                    className="w-full h-[48px] sm:h-[42px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] sm:rounded-xl text-[14px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all shadow-sm"
                     value={form.note}
                     onChange={(e) => setForm({ ...form, note: e.target.value })}
                   />
                 </div>
               </div>
 
-              <div className="pt-4 flex gap-4">
+              <div className="pt-2 flex sm:justify-end gap-3 pb-2 border-t border-gray-100 mt-2">
                 <button
                   type="button"
                   onClick={() => setForm(null)}
                   disabled={saving}
-                  className="flex-1 py-4 rounded-[14px] font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 transition-colors cursor-pointer"
+                  className="flex-1 sm:flex-none sm:px-6 py-3 sm:py-2.5 rounded-[14px] sm:rounded-xl font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 transition-colors cursor-pointer text-[15px] sm:text-sm"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-[2] py-4 rounded-[14px] font-black text-white bg-gradient-to-b from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 shadow-[0_4px_12px_rgba(239,68,68,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer border border-red-600/50"
+                  className="flex-[2] sm:flex-none sm:px-8 py-3 sm:py-2.5 rounded-[14px] sm:rounded-xl font-black text-white bg-gradient-to-b from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 shadow-[0_4px_12px_rgba(239,68,68,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer border border-red-600/50 text-[15px] sm:text-sm"
                 >
                   {saving ? 'Saving...' : 'Save Expense'}
                 </button>
@@ -338,11 +344,11 @@ export default function Expenses() {
         </div>
       )}
 
-      {/* Floating Action Button */}
+      {/* Floating Action Button - Mobile Only */}
       {!form && (
         <button
           onClick={startAdd}
-          className="fixed bottom-[80px] right-5 sm:right-8 bg-gradient-to-b from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white px-6 py-4 rounded-full shadow-[0_8px_30px_-8px_rgba(239,68,68,0.5)] hover:shadow-[0_12px_40px_-8px_rgba(239,68,68,0.6)] flex items-center gap-2.5 font-black transition-all active:scale-95 z-40 border border-red-400/50 hover:-translate-y-1"
+          className="sm:hidden fixed bottom-[80px] right-5 bg-gradient-to-b from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white px-6 py-4 rounded-full shadow-[0_8px_30px_-8px_rgba(239,68,68,0.5)] flex items-center gap-2.5 font-black transition-all active:scale-95 z-40 border border-red-400/50"
         >
           <Plus size={22} strokeWidth={3} /> <span className="tracking-wide">Log Expense</span>
         </button>

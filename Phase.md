@@ -38,11 +38,14 @@ Build in phases, each with a clear exit criteria — don't start a phase until t
 - Build Reports: monthly aggregates, party-wise profitability, highest pending payments.
 - **Exit criteria:** you can hand the phone to Papa, he opens Reports, and the monthly numbers match what he'd expect from that period's challans (spot-check against real paper records).
 
-### Phase 5 — Offline Queue
-**Goal:** the app never loses an entry because signal dropped mid-pickup.
-- Add IndexedDB outbox (Dexie.js) — writes save locally first, sync to Supabase in background.
-- Add the sync-status indicator (see `design.md` §4).
-- **Exit criteria:** turn on airplane mode, add 3 entries, turn it back on — all 3 appear in Supabase within seconds, with no duplicates.
+### Phase 5: Complete Offline Capability (COMPLETE)
+*   **Goal**: Full read/write capability when offline, background syncing when online.
+*   **Implementation**:
+    *   **Local Queue**: Integrate **Dexie.js** (IndexedDB wrapper) to store mutations (Create, Update, Delete) locally when offline.
+    *   **Sync Logic**: Implement a background sync function that pushes queued mutations to Supabase when the `online` event fires.
+    *   **Optimistic UI**: Update API helper functions to return locally merged data (Server Data + Pending Mutations) so the UI reflects changes immediately.
+    *   **Conflict Resolution**: Use simple "last-write-wins" or timestamp-based merging for simplicity in this phase.
+    *   **UI Indicators**: Add a small indicator (e.g., a cloud icon) in the header showing sync status (Online, Offline, Syncing, Pending Items).
 
 ### Phase 6 — Google Sheets Backup
 **Goal:** the actual reason this phase list exists — every entry is safe outside the app too.

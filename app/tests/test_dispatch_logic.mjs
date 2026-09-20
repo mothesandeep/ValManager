@@ -23,7 +23,6 @@ function sanitizeNumberString(str) {
 function validateBag(bag, dispatchType, rateStr) {
   let grossError = null
   let bungariError = null
-  let bungariWeightError = null
   let rolaError = null
   let tareError = null
 

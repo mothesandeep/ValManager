@@ -14,23 +14,6 @@ function fmtMoney(n) {
   return `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 }
 
-// 1. Pure calculation functions mirroring lib/calculations.ts
-function calcReceiptNetWeight(grossKg, rolaCount, perRolaGrams = 200) {
-  const g = Number(grossKg) || 0
-  const r = Number(rolaCount) || 0
-  const tare = (r * (Number(perRolaGrams) || 200)) / 1000
-  return Math.max(0, g - tare)
-}
-
-function calcDispatchNetWeight(boreGrossKg, bungariCount = 0, bungariWeightG = 70, dispatchType = 'Val') {
-  const gross = Number(boreGrossKg) || 0
-  if (dispatchType === 'Kali') {
-    return gross
-  }
-  const bCount = Number(bungariCount) || 0
-  const tare = (bCount * (Number(bungariWeightG) || 70)) / 1000
-  return Math.max(0, gross - tare)
-}
 
 function calcBatchGapcha(inputKasabNet, outputValNet, outputKaliNet = 0) {
   const input = Number(inputKasabNet) || 0
@@ -38,11 +21,6 @@ function calcBatchGapcha(inputKasabNet, outputValNet, outputKaliNet = 0) {
   return Math.max(0, input - output)
 }
 
-function calcRemainingGapcha(gapchaGenerated, gapchaSold) {
-  const gen = Number(gapchaGenerated) || 0
-  const sold = Number(gapchaSold) || 0
-  return Math.max(0, gen - sold)
-}
 
 function calcSaleAmount(weightKg, ratePerKg) {
   const wt = Number(weightKg) || 0

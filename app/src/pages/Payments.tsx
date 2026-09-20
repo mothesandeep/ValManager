@@ -1,20 +1,17 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Pencil, Trash2, Check, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, X } from 'lucide-react'
 import { fetchParties } from '../lib/api/parties'
 import { fetchPayments, insertPayment, updatePayment, deletePayment, type PaymentPayload } from '../lib/api/payments'
 import { fetchDispatches } from '../lib/api/dispatch'
 
 
-import type { Party, PaymentWithParty } from '../types'
-import { fmtDate, fmtMoney, todayStr } from '../types'
-import { SectionHeader } from '../components/ui/SectionHeader'
-import { KpiCard } from '../components/ui/KpiCard'
+import type { Party } from '../features/parties/types'
+import type { PaymentWithParty } from '../features/payments/types'
+import { fmtDate, todayStr } from '../utils/date'
+import { fmtMoney } from '../utils/format'
+import { PageHeader } from '../components/ui/PageHeader'
 import { Button } from '../components/ui/Button'
-import { Field } from '../components/ui/Field'
-import { TextInput } from '../components/ui/TextInput'
-import { Select } from '../components/ui/Select'
-import { Table } from '../components/ui/Table'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ConfirmDelete } from '../components/ui/ConfirmDelete'
 import { useMonth } from '../context/MonthContext'
@@ -28,7 +25,7 @@ interface PaymentFormState {
 }
 
 export default function Payments() {
-    const hasAutoOpened = useRef(false)
+    
 const [searchParams, setSearchParams] = useSearchParams()
   const { filterByMonth, formattedMonth } = useMonth()
   const [parties, setParties] = useState<Party[]>([])
@@ -178,27 +175,36 @@ const [searchParams, setSearchParams] = useSearchParams()
 
   return (
     <div className="space-y-5">
-      <SectionHeader
+      <PageHeader
         title="Payments"
-        subtitle="Log party payments, manage receivables, and track balances"
+        description="Log party payments, manage receivables, and track balances"
+        actions={
+          !form && parties.length > 0 && (
+            <div className="hidden sm:block">
+              <Button onClick={startAdd} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                <Plus size={18} strokeWidth={2.5} /> Log Payment
+              </Button>
+            </div>
+          )
+        }
       />
 
       {/* ── Month Summary KPI ─────────────────────────────────────── */}
       {!form && (
         <div className="grid grid-cols-2 gap-4 mb-8">
-          <div className="rounded-[20px] p-4.5 bg-emerald-50/50 shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-emerald-100/50 transition-all">
-            <div className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-600/70 mb-2">Total Collected</div>
-            <div className="text-[22px] font-black tabular-nums leading-none tracking-tight text-emerald-700 mb-1.5">
+          <div className="rounded-[var(--radius-xl)] p-5 bg-[var(--color-positive-bg)] shadow-[var(--shadow-sm)] border border-[var(--color-positive-border)] transition-all">
+            <div className="text-[10px] font-extrabold uppercase tracking-widest text-[var(--color-positive)] mb-2">Total Collected</div>
+            <div className="text-[24px] font-black tabular-nums leading-none tracking-tight text-[var(--color-positive)] mb-1.5">
               {fmtMoney(monthCollectedTotal)}
             </div>
-            <div className="text-[10px] font-bold text-emerald-600/50">{formattedMonth}</div>
+            <div className="text-[10px] font-bold text-[var(--color-positive)]">{formattedMonth}</div>
           </div>
-          <div className="rounded-[20px] p-4.5 bg-white shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100/80 transition-all">
-            <div className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-2">Payments Logged</div>
-            <div className="text-[22px] font-black tabular-nums leading-none tracking-tight text-gray-900 mb-1.5">
-              {filteredPayments.length} <span className="text-[14px] text-gray-400 font-bold tracking-normal">entries</span>
+          <div className="rounded-[var(--radius-xl)] p-5 bg-[var(--color-card)] shadow-[var(--shadow-sm)] border border-[var(--color-border)] transition-all">
+            <div className="text-[10px] font-extrabold uppercase tracking-widest text-[var(--color-ink-soft)] mb-2">Payments Logged</div>
+            <div className="text-[24px] font-black tabular-nums leading-none tracking-tight text-[var(--color-ink)] mb-1.5">
+              {filteredPayments.length} <span className="text-[14px] text-[var(--color-ink-soft)] font-bold tracking-normal">entries</span>
             </div>
-            <div className="text-[10px] font-medium text-gray-400">{formattedMonth}</div>
+            <div className="text-[10px] font-medium text-[var(--color-ink-soft)]">{formattedMonth}</div>
           </div>
         </div>
       )}
@@ -231,7 +237,7 @@ const [searchParams, setSearchParams] = useSearchParams()
             {partyBalances.map((r) => (
               <div
                 key={r.party.id}
-                className="rounded-[24px] p-5 bg-white border border-gray-100/80 shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.08)] transition-all"
+                className="rounded-[var(--radius-xl)] p-5 bg-[var(--color-card)] border border-[var(--color-border)] shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-all"
               >
                 <h3 className="font-extrabold text-[16px] mb-4 text-gray-900 tracking-tight">
                   {r.party.name}
@@ -277,7 +283,7 @@ const [searchParams, setSearchParams] = useSearchParams()
               {filteredPayments.map((p) => (
                 <div
                   key={p.id}
-                  className="rounded-[20px] p-4 bg-white border border-gray-100/80 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between group transition-all hover:shadow-[0_4px_15px_rgba(0,0,0,0.04)]"
+                  className="rounded-[var(--radius-xl)] p-4 bg-[var(--color-card)] border border-[var(--color-border)] shadow-[var(--shadow-sm)] flex items-center justify-between group transition-all hover:shadow-[var(--shadow-md)]"
                 >
                   <div className="flex flex-col">
                     <span className="font-bold text-[15px] text-gray-900 tracking-tight">{p.party?.name ?? '—'}</span>
@@ -328,18 +334,18 @@ const [searchParams, setSearchParams] = useSearchParams()
 
       {/* ── Add / Edit Form Modal ──────────────────────────────────────── */}
       {form && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-md sm:items-center sm:justify-center p-0 sm:p-4 transition-all">
-          <div className="bg-[#fcfcfb] w-full sm:w-[480px] rounded-t-[24px] sm:rounded-3xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:slide-in-from-bottom-6 duration-400 ease-out">
-            <div className="flex justify-center pt-3 pb-1 bg-white">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 transition-all">
+          <div className="bg-[#fcfcfb] w-full sm:max-w-[480px] rounded-t-[24px] sm:rounded-2xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:zoom-in-95 duration-300 ease-out">
+            <div className="sm:hidden flex justify-center pt-3 pb-1 bg-white">
               <div className="w-12 h-1.5 bg-gray-200 rounded-full"></div>
             </div>
             
-            <div className="px-6 pb-4 pt-2 bg-white flex justify-between items-start">
+            <div className="px-6 pb-4 pt-4 sm:pt-6 bg-white flex justify-between items-start border-b border-gray-100 shrink-0">
               <div>
                 <p className="text-[10px] font-extrabold tracking-widest text-emerald-600/70 uppercase mb-1.5">
                   {form.id ? 'EDIT PAYMENT' : 'NEW PAYMENT'}
                 </p>
-                <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
                   Log Received Amount
                 </h2>
               </div>
@@ -359,7 +365,7 @@ const [searchParams, setSearchParams] = useSearchParams()
                     required
                     value={form.partyId}
                     onChange={(e) => setForm({ ...form, partyId: e.target.value })}
-                    className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[15px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all appearance-none cursor-pointer shadow-sm"
+                    className="w-full h-[48px] sm:h-[42px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] sm:rounded-xl text-[15px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all appearance-none cursor-pointer shadow-sm"
                   >
                     {parties.map((p) => (
                       <option key={p.id} value={p.id}>{p.name}</option>
@@ -375,7 +381,7 @@ const [searchParams, setSearchParams] = useSearchParams()
                       type="number"
                       step="0.01"
                       placeholder="e.g. 5000"
-                      className="w-full h-[48px] px-4 bg-emerald-50/30 border border-emerald-200/50 rounded-[14px] text-[16px] font-black tabular-nums text-emerald-700 placeholder:text-emerald-700/30 focus:outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-sm"
+                      className="w-full h-[48px] sm:h-[42px] px-4 bg-emerald-50/30 border border-emerald-200/50 rounded-[14px] sm:rounded-xl text-[16px] sm:text-[15px] font-black tabular-nums text-emerald-700 placeholder:text-emerald-700/30 focus:outline-none focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all shadow-sm"
                       value={form.amount}
                       onChange={(e) => setForm({ ...form, amount: e.target.value })}
                     />
@@ -385,7 +391,7 @@ const [searchParams, setSearchParams] = useSearchParams()
                     <input
                       type="date"
                       required
-                      className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-sm"
+                      className="w-full h-[48px] sm:h-[42px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] sm:rounded-xl text-[14px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all shadow-sm"
                       value={form.date}
                       onChange={(e) => setForm({ ...form, date: e.target.value })}
                     />
@@ -397,26 +403,26 @@ const [searchParams, setSearchParams] = useSearchParams()
                   <input
                     type="text"
                     placeholder="e.g. GPay / Cash / Cheque"
-                    className="w-full h-[48px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] text-[14px] font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-sm"
+                    className="w-full h-[48px] sm:h-[42px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] sm:rounded-xl text-[14px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all shadow-sm"
                     value={form.note}
                     onChange={(e) => setForm({ ...form, note: e.target.value })}
                   />
                 </div>
               </div>
 
-              <div className="pt-4 flex gap-4">
+              <div className="pt-2 flex sm:justify-end gap-3 pb-2 border-t border-gray-100 mt-2">
                 <button
                   type="button"
                   onClick={() => setForm(null)}
                   disabled={saving}
-                  className="flex-1 py-4 rounded-[14px] font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 transition-colors cursor-pointer"
+                  className="flex-1 sm:flex-none sm:px-6 py-3 sm:py-2.5 rounded-[14px] sm:rounded-xl font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 transition-colors cursor-pointer text-[15px] sm:text-sm"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-[2] py-4 rounded-[14px] font-black text-white bg-gradient-to-b from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 shadow-[0_4px_12px_rgba(16,185,129,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer border border-emerald-600/50"
+                  className="flex-[2] sm:flex-none sm:px-8 py-3 sm:py-2.5 rounded-[14px] sm:rounded-xl font-black text-white bg-gradient-to-b from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 shadow-[0_4px_12px_rgba(16,185,129,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer border border-emerald-600/50 text-[15px] sm:text-sm"
                 >
                   {saving ? 'Saving...' : 'Save Payment'}
                 </button>
@@ -426,11 +432,11 @@ const [searchParams, setSearchParams] = useSearchParams()
         </div>
       )}
 
-      {/* Floating Action Button */}
+      {/* Floating Action Button - Mobile Only */}
       {!form && parties.length > 0 && (
         <button
           onClick={startAdd}
-          className="fixed bottom-[80px] right-5 sm:right-8 bg-gradient-to-b from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white px-6 py-4 rounded-full shadow-[0_8px_30px_-8px_rgba(16,185,129,0.5)] hover:shadow-[0_12px_40px_-8px_rgba(16,185,129,0.6)] flex items-center gap-2.5 font-black transition-all active:scale-95 z-40 border border-emerald-400/50 hover:-translate-y-1"
+          className="sm:hidden fixed bottom-[80px] right-5 bg-gradient-to-b from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white px-6 py-4 rounded-full shadow-[0_8px_30px_-8px_rgba(16,185,129,0.5)] flex items-center gap-2.5 font-black transition-all active:scale-95 z-40 border border-emerald-400/50"
         >
           <Plus size={22} strokeWidth={3} /> <span className="tracking-wide">Log Payment</span>
         </button>

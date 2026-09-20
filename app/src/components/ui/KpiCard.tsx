@@ -1,4 +1,4 @@
-import React from 'react'
+
 
 export interface KpiCardProps {
   label: string
@@ -18,28 +18,26 @@ export function KpiCard({ label, value, sub, tone, loading }: KpiCardProps) {
 
   return (
     <div
-      className="rounded-xl p-3.5 sm:p-4 flex flex-col justify-between h-full shadow-2xs"
-      style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
+      className="rounded-[var(--radius-lg)] p-4 flex flex-col justify-between h-full bg-[var(--color-card)] shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-shadow"
+      style={{ border: '1px solid var(--color-border)' }}
     >
-      <span className="text-[11px] sm:text-xs font-semibold text-[var(--color-ink-soft)] uppercase tracking-wider truncate">
+      <span className="text-xs font-semibold text-[var(--color-ink-soft)] uppercase tracking-wider truncate mb-1">
         {label}
       </span>
       <span
-        className={`text-lg sm:text-2xl font-black tabular-nums leading-tight my-1 truncate ${loading ? 'skeleton' : ''}`}
+        className={`text-2xl sm:text-3xl font-bold tabular-nums leading-tight truncate ${loading ? 'skeleton' : ''}`}
         style={{
           color: loading ? 'transparent' : toneColor,
           fontFamily: 'var(--font-display)',
         }}
       >
-        {/* non-breaking spaces keep skeleton width realistic */}
         {loading ? '\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0' : value}
       </span>
       {sub && (
-        <span className="text-[11px] sm:text-xs text-[var(--color-ink-soft)] truncate font-medium">
+        <span className="text-xs text-[var(--color-ink-soft)] truncate mt-1">
           {sub}
         </span>
       )}
     </div>
   )
 }
-

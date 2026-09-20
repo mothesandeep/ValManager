@@ -7,12 +7,6 @@ interface Props {
   label?: string
 }
 
-/**
- * Two-tap delete button per design.md §3:
- *   tap once → arm (shows check + cancel)
- *   tap check → execute delete
- *   tap X or blur → disarm
- */
 export default function InlineConfirmDelete({ onConfirm, disabled, label = 'Delete' }: Props) {
   const [armed, setArmed] = useState(false)
 
@@ -24,14 +18,11 @@ export default function InlineConfirmDelete({ onConfirm, disabled, label = 'Dele
         disabled={disabled}
         title={label}
         aria-label={label}
-        className="flex items-center justify-center rounded-lg transition-colors"
+        className="flex items-center justify-center rounded-[var(--radius-md)] transition-colors text-[var(--color-ink-soft)] hover:text-[var(--color-due)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         style={{
           minHeight: 40,
           minWidth: 40,
-          color: 'var(--color-ink-soft)',
         }}
-        onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-due)')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-ink-soft)')}
       >
         <Trash2 size={16} strokeWidth={2} />
       </button>
@@ -45,29 +36,26 @@ export default function InlineConfirmDelete({ onConfirm, disabled, label = 'Dele
         onClick={() => { onConfirm(); setArmed(false) }}
         title="Confirm delete"
         aria-label="Confirm delete"
-        className="flex items-center justify-center rounded-lg transition-colors"
+        className="flex items-center justify-center rounded-[var(--radius-md)] transition-colors text-[var(--color-due)] bg-[var(--color-due-bg)] cursor-pointer"
         style={{
           minHeight: 40,
           minWidth: 40,
-          color: 'var(--color-due)',
-          background: 'var(--color-due-bg)',
         }}
       >
-        <Check size={15} strokeWidth={2.5} />
+        <Check size={16} strokeWidth={2.5} />
       </button>
       <button
         type="button"
         onClick={() => setArmed(false)}
         title="Cancel"
         aria-label="Cancel delete"
-        className="flex items-center justify-center rounded-lg transition-colors"
+        className="flex items-center justify-center rounded-[var(--radius-md)] transition-colors text-[var(--color-ink-soft)] hover:bg-[var(--color-border-soft)] cursor-pointer"
         style={{
           minHeight: 40,
           minWidth: 40,
-          color: 'var(--color-ink-soft)',
         }}
       >
-        <X size={15} strokeWidth={2} />
+        <X size={16} strokeWidth={2} />
       </button>
     </span>
   )

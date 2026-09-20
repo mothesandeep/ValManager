@@ -3,8 +3,10 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   PackagePlus,
   Truck,
-  IndianRupee,
   ChevronRight,
+  Wallet,
+  TrendingUp,
+  Users,
 } from 'lucide-react'
 import { fetchParties } from '../lib/api/parties'
 import { fetchReceipts } from '../lib/api/receipts'
@@ -16,15 +18,13 @@ import { computePartyStats } from '../lib/api/stats'
 
 
 import { useMonth } from '../context/MonthContext'
-import type {
-  Party,
-  ReceiptWithParty,
-  DispatchWithParty,
-  Expense,
-  PartyStats,
-} from '../types'
-import { fmtDate, fmtKg, fmtMoney } from '../types'
-import { SectionHeader } from '../components/ui/SectionHeader'
+import type { Party, PartyStats } from '../features/parties/types'
+import type { ReceiptWithParty } from '../features/receiving/types'
+import type { DispatchWithParty } from '../features/dispatch/types'
+import type { Expense } from '../features/expenses/types'
+import { fmtDate } from '../utils/date'
+import { fmtKg, fmtMoney } from '../utils/format'
+import { PageHeader } from '../components/ui/PageHeader'
 
 const isRolaEntry = (d: DispatchWithParty) => d.dispatch_type === 'Kali' || d.dispatch_type === 'Rola'
 
@@ -59,7 +59,7 @@ type ChallanGroup = {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { filterByMonth, formattedMonth } = useMonth()
+  const { filterByMonth } = useMonth()
   const [parties, setParties] = useState<Party[]>([])
   const [receipts, setReceipts] = useState<ReceiptWithParty[]>([])
   const [dispatches, setDispatches] = useState<DispatchWithParty[]>([])
@@ -225,97 +225,58 @@ export default function Dashboard() {
   }, [monthReceipts])
 
   return (
-    <div className="space-y-5 pb-8 animate-in fade-in duration-500">
+    <div className="space-y-5 pb-8 animate-in fade-in duration-500 max-w-5xl mx-auto w-full">
       {/* Title — hidden on mobile, visible on desktop */}
       <div className="hidden sm:block">
-        <SectionHeader
+        <PageHeader
           title="Dashboard"
-          subtitle="Jari Kasab Val — overview & real-time metrics"
+          description="Jari Kasab Val — overview & real-time metrics"
         />
       </div>
 
-      {/* 3 Premium Quick Action Buttons */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
-        <button
-          type="button"
-          onClick={() => navigate('/receiving?action=new')}
-          className="group relative flex flex-col items-center justify-center gap-3 py-6 px-2 rounded-[24px] bg-gradient-to-b from-amber-50/80 to-amber-100/50 hover:from-amber-100 hover:to-amber-200/60 active:scale-[0.97] transition-all cursor-pointer shadow-[0_4px_20px_-4px_rgba(251,191,36,0.15)] hover:shadow-[0_8px_25px_-5px_rgba(251,191,36,0.25)] border border-amber-200/50 backdrop-blur-sm overflow-hidden"
-        >
-          <div className="absolute inset-0 bg-gradient-to-tr from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <div className="w-14 h-14 rounded-[18px] bg-gradient-to-br from-amber-400 to-amber-600 text-white flex items-center justify-center shadow-[0_4px_12px_rgba(217,119,6,0.3)] group-hover:scale-105 transition-transform duration-300 relative z-10 ring-1 ring-amber-300/50">
-            <PackagePlus size={26} strokeWidth={2.5} />
-          </div>
-          <div className="relative z-10 text-center mt-1">
-            <div className="text-[13px] font-black text-amber-900 tracking-tight">Kasab Aaya</div>
-          </div>
-        </button>
 
-        <button
-          type="button"
-          onClick={() => navigate('/dispatch?action=new')}
-          className="group relative flex flex-col items-center justify-center gap-3 py-6 px-2 rounded-[24px] bg-gradient-to-b from-blue-50/80 to-blue-100/50 hover:from-blue-100 hover:to-blue-200/60 active:scale-[0.97] transition-all cursor-pointer shadow-[0_4px_20px_-4px_rgba(59,130,246,0.1)] hover:shadow-[0_8px_25px_-5px_rgba(59,130,246,0.2)] border border-blue-200/50 backdrop-blur-sm overflow-hidden"
-        >
-          <div className="absolute inset-0 bg-gradient-to-tr from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <div className="w-14 h-14 rounded-[18px] bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center shadow-[0_4px_12px_rgba(37,99,235,0.3)] group-hover:scale-105 transition-transform duration-300 relative z-10 ring-1 ring-blue-400/50">
-            <Truck size={26} strokeWidth={2.5} />
-          </div>
-          <div className="relative z-10 text-center mt-1">
-            <div className="text-[13px] font-black text-blue-900 tracking-tight">Val Bheja</div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => navigate('/payments?action=new')}
-          className="group relative flex flex-col items-center justify-center gap-3 py-6 px-2 rounded-[24px] bg-gradient-to-b from-emerald-50/80 to-emerald-100/50 hover:from-emerald-100 hover:to-emerald-200/60 active:scale-[0.97] transition-all cursor-pointer shadow-[0_4px_20px_-4px_rgba(16,185,129,0.1)] hover:shadow-[0_8px_25px_-5px_rgba(16,185,129,0.2)] border border-emerald-200/50 backdrop-blur-sm overflow-hidden"
-        >
-          <div className="absolute inset-0 bg-gradient-to-tr from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <div className="w-14 h-14 rounded-[18px] bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-[0_4px_12px_rgba(5,150,105,0.3)] group-hover:scale-105 transition-transform duration-300 relative z-10 ring-1 ring-emerald-300/50">
-            <IndianRupee size={26} strokeWidth={3} />
-          </div>
-          <div className="relative z-10 text-center mt-1">
-            <div className="text-[13px] font-black text-emerald-900 tracking-tight">Paisa Aaya</div>
-          </div>
-        </button>
-      </div>
 
       {/* Hero Numbers (Primary KPIs) */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <div className="rounded-[24px] p-5 relative overflow-hidden bg-gradient-to-br from-[#9a5311] to-[#703906] shadow-[0_8px_30px_-8px_rgba(154,83,17,0.4)] border border-[#c4772b]/30">
-          <div className="absolute top-0 right-0 p-8 opacity-10">
-            <IndianRupee size={100} strokeWidth={3} className="text-white transform rotate-12" />
-          </div>
-          <div className="relative z-10">
-            <div className="text-[10px] font-extrabold text-white/70 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-              Baaki Milna Hai
+        <div className="rounded-[24px] p-5 sm:p-6 bg-white shadow-sm border border-gray-100 flex flex-col group hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-2.5 mb-5 sm:mb-6">
+            <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
+              <Wallet size={16} className="text-amber-600" />
             </div>
+            <div className="text-[10px] sm:text-[11px] font-bold text-gray-500 uppercase tracking-widest leading-tight">
+              Baaki<br/>Milna Hai
+            </div>
+          </div>
+          <div>
             {loading ? (
-              <div className="h-9 w-28 rounded-lg bg-white/10 animate-pulse mt-1" />
+              <div className="h-9 w-28 rounded-lg bg-gray-100 animate-pulse mt-1" />
             ) : (
-              <div className="text-[28px] sm:text-4xl font-black text-white leading-none tabular-nums tracking-tight drop-shadow-md">
+              <div className="text-[28px] sm:text-[34px] font-black text-gray-900 leading-none tabular-nums tracking-tighter">
                 {fmtMoney(totalDue)}
               </div>
             )}
-            <div className="text-[11px] font-medium text-amber-200/80 mt-2 tracking-wide">sabka pending</div>
+            <div className="text-[11px] font-semibold text-gray-400 mt-1.5 tracking-wide">Pending from parties</div>
           </div>
         </div>
 
-        <div className="rounded-[24px] p-5 relative overflow-hidden bg-gradient-to-br from-[#126b3a] to-[#0a4524] shadow-[0_8px_30px_-8px_rgba(18,107,58,0.4)] border border-[#239958]/30">
-          <div className="absolute top-0 right-0 p-8 opacity-10">
-            <IndianRupee size={100} strokeWidth={3} className="text-white transform -rotate-12" />
-          </div>
-          <div className="relative z-10">
-            <div className="text-[10px] font-extrabold text-white/70 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-              Is Mahine Kamaai
+        <div className="rounded-[24px] p-5 sm:p-6 bg-white shadow-sm border border-gray-100 flex flex-col group hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-2.5 mb-5 sm:mb-6">
+            <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+              <TrendingUp size={16} className="text-emerald-600" />
             </div>
+            <div className="text-[10px] sm:text-[11px] font-bold text-gray-500 uppercase tracking-widest leading-tight">
+              Is Mahine<br/>Kamaai
+            </div>
+          </div>
+          <div>
             {loading ? (
-              <div className="h-9 w-28 rounded-lg bg-white/10 animate-pulse mt-1" />
+              <div className="h-9 w-28 rounded-lg bg-gray-100 animate-pulse mt-1" />
             ) : (
-              <div className="text-[28px] sm:text-4xl font-black text-white leading-none tabular-nums tracking-tight drop-shadow-md">
+              <div className="text-[28px] sm:text-[34px] font-black text-gray-900 leading-none tabular-nums tracking-tighter">
                 {fmtMoney(monthRevenue)}
               </div>
             )}
-            <div className="text-[11px] font-medium text-emerald-200/80 mt-2 tracking-wide">{formattedMonth}</div>
+            <div className="text-[11px] font-semibold text-gray-400 mt-1.5 tracking-wide">Current month's earnings</div>
           </div>
         </div>
       </div>
@@ -323,28 +284,30 @@ export default function Dashboard() {
       {/* 4 Secondary Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { label: 'Val Bheja', value: fmtKg(monthDispatchNet), sub: formattedMonth, color: 'text-blue-600', bg: 'bg-blue-50/50' },
-          { label: 'Kasab Aaya', value: fmtKg(monthReceivedNet), sub: formattedMonth, color: 'text-[#a57b3f]', bg: 'bg-[#a57b3f]/5' },
-          { label: 'Rola Pending', value: `${rolaPending} pcs`, sub: 'parties ke paas', color: rolaPending > 0 ? 'text-[#a57b3f]' : 'text-gray-400', bg: 'bg-[#a57b3f]/5' },
-          { label: 'Kharcha', value: fmtMoney(monthExpenses), sub: formattedMonth, color: monthExpenses > 0 ? 'text-red-600' : 'text-gray-400', bg: 'bg-red-50/50' },
-        ].map(({ label, value, sub, color, bg }) => (
+          { label: 'Val Bheja', value: fmtKg(monthDispatchNet), sub: null, color: 'text-gray-900' },
+          { label: 'Kasab Aaya', value: fmtKg(monthReceivedNet), sub: null, color: 'text-[var(--color-brass)]' },
+          { label: 'Rola Pending', value: `${rolaPending} pcs`, sub: 'parties ke paas', color: rolaPending > 0 ? 'text-[var(--color-brass)]' : 'text-gray-400' },
+          { label: 'Kharcha', value: fmtMoney(monthExpenses), sub: null, color: monthExpenses > 0 ? 'text-[var(--color-due)]' : 'text-gray-400' },
+        ].map(({ label, value, sub, color }) => (
           <div
             key={label}
-            className={`rounded-[20px] p-4.5 bg-white shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100/80 ${bg} transition-all hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.08)]`}
+            className="rounded-[16px] px-4 py-3 sm:py-3.5 bg-white shadow-sm border border-gray-100 transition-shadow hover:shadow-md"
           >
-            <div className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-2">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">
               {label}
             </div>
             {loading ? (
-              <div className="h-7 w-20 rounded bg-gray-100 animate-pulse mb-1" />
+              <div className="h-6 w-16 rounded bg-gray-100 animate-pulse mb-1" />
             ) : (
-              <div className={`text-[19px] font-black tabular-nums leading-none tracking-tight ${color} mb-1.5`}>
+              <div className={`text-[19px] sm:text-[22px] font-black tabular-nums leading-none tracking-tighter ${color} ${sub ? 'mb-1' : ''}`}>
                 {value}
               </div>
             )}
-            <div className="text-[10px] font-medium text-gray-400">
-              {sub}
-            </div>
+            {sub && (
+              <div className="text-[11px] font-medium text-gray-400 truncate">
+                {sub}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -359,7 +322,7 @@ export default function Dashboard() {
             </h3>
             <Link
               to="/receiving"
-              className="text-[13px] font-bold flex items-center gap-0.5 text-[#a57b3f] hover:text-[#8f6932] transition-colors"
+              className="text-sm font-bold flex items-center gap-0.5 text-[var(--color-brass)] hover:text-[var(--color-brass-dark)] transition-colors"
             >
               View all <ChevronRight size={16} strokeWidth={2.5} />
             </Link>
@@ -391,11 +354,11 @@ export default function Dashboard() {
                   >
                     <div className="flex items-center gap-2.5 min-w-0 flex-wrap mb-3">
                       {group.challanNo ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-black tracking-wide bg-[#a57b3f] text-white shadow-sm">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-amber-50 text-amber-800 border border-amber-200/50">
                           Ch. #{group.challanNo}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-black tracking-wide bg-gray-100 text-gray-500">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-gray-50 text-gray-500 border border-gray-200/50">
                           No Ch.
                         </span>
                       )}
@@ -410,7 +373,7 @@ export default function Dashboard() {
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-4 sm:gap-6 min-w-0">
                         <div className="flex flex-col min-w-0">
-                          <span className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-0.5">
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
                             Net Kasab
                           </span>
                           <span className="text-[15px] font-black tabular-nums tracking-tight text-[#a57b3f]">
@@ -420,7 +383,7 @@ export default function Dashboard() {
 
                         {group.totalRolaCount > 0 && (
                           <div className="flex flex-col min-w-0">
-                            <span className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-0.5">
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
                               Rola
                             </span>
                             <span className="text-[15px] font-black tabular-nums tracking-tight text-gray-700">
@@ -430,11 +393,11 @@ export default function Dashboard() {
                         )}
                         
                         {uniqueColors.length > 0 && (
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-0.5">
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
                               Item
                             </span>
-                            <span className="text-[13px] font-bold tracking-tight text-gray-500 truncate max-w-[120px]">
+                            <span className="text-[13px] font-bold tracking-tight text-gray-500 truncate">
                               {uniqueColors.join(', ')}
                             </span>
                           </div>
@@ -442,10 +405,10 @@ export default function Dashboard() {
                       </div>
                       
                       <div className="flex flex-col items-end shrink-0">
-                         <span className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-0.5">
+                         <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
                             Bags
                          </span>
-                         <span className="text-[13px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-lg border border-gray-200/50">
+                         <span className="text-[15px] font-black text-gray-600">
                            {group.entries.length}
                          </span>
                       </div>
@@ -465,7 +428,7 @@ export default function Dashboard() {
             </h3>
             <Link
               to="/dispatch"
-              className="text-[13px] font-bold flex items-center gap-0.5 text-[#a57b3f] hover:text-[#8f6932] transition-colors"
+              className="text-sm font-bold flex items-center gap-0.5 text-[var(--color-brass)] hover:text-[var(--color-brass-dark)] transition-colors"
             >
               View all <ChevronRight size={16} strokeWidth={2.5} />
             </Link>
@@ -495,11 +458,11 @@ export default function Dashboard() {
                 >
                   <div className="flex items-center gap-2.5 min-w-0 flex-wrap mb-3">
                     {group.challanNo ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-black tracking-wide bg-[#a57b3f] text-white shadow-sm">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-amber-50 text-amber-800 border border-amber-200/50">
                         Ch. #{group.challanNo}
                       </span>
                     ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-black tracking-wide bg-gray-100 text-gray-500">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-gray-50 text-gray-500 border border-gray-200/50">
                         No Ch.
                       </span>
                     )}
@@ -515,7 +478,7 @@ export default function Dashboard() {
                     <div className="flex items-center gap-4 sm:gap-6 min-w-0">
                       {group.totalValNet > 0 && (
                         <div className="flex flex-col min-w-0">
-                          <span className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-0.5">
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
                             Net Val
                           </span>
                           <span className="text-[15px] font-black tabular-nums tracking-tight text-[#a57b3f]">
@@ -526,7 +489,7 @@ export default function Dashboard() {
 
                       {group.hasRola && group.totalRolaGross > 0 && (
                         <div className="flex flex-col min-w-0">
-                          <span className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-0.5">
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
                             Rola Wt
                           </span>
                           <span className="text-[15px] font-black tabular-nums tracking-tight text-gray-700">
@@ -537,7 +500,7 @@ export default function Dashboard() {
 
                       {group.hasRola && group.totalRolaCount > 0 && (
                         <div className="flex flex-col min-w-0">
-                          <span className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 mb-0.5">
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
                             Return
                           </span>
                           <span className="text-[15px] font-black tabular-nums tracking-tight text-gray-700">
@@ -565,19 +528,23 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Parties Row */}
       <div className="pt-2">
         <button
           type="button"
-          className="w-full flex items-center justify-between px-6 py-5 rounded-[24px] border border-gray-100 bg-white shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.08)] hover:border-gray-200 active:scale-[0.99] transition-all group cursor-pointer"
+          className="w-full flex items-center justify-between p-4 sm:p-5 rounded-[24px] border border-gray-100 bg-white shadow-sm hover:shadow-md active:scale-[0.99] transition-all group cursor-pointer"
           onClick={() => navigate('/parties')}
         >
-          <div className="text-left">
-            <div className="font-extrabold text-[17px] text-gray-900 group-hover:text-[#a57b3f] transition-colors tracking-tight">
-              Party Directory
+          <div className="flex items-center gap-4 text-left">
+            <div className="w-12 h-12 rounded-[16px] bg-[#a57b3f]/10 flex items-center justify-center shrink-0 group-hover:bg-[#a57b3f] transition-colors">
+               <Users size={24} className="text-[#a57b3f] group-hover:text-white transition-colors" />
             </div>
-            <div className="text-[13px] font-medium text-gray-500 mt-0.5">
-              {loading ? 'Loading...' : `${parties.length} parties registered`}
+            <div>
+              <div className="font-bold text-[17px] text-gray-900 tracking-tight">
+                Party Directory
+              </div>
+              <div className="text-[13px] font-medium text-gray-400 mt-0.5">
+                {loading ? 'Loading...' : `${parties.length} registered parties`}
+              </div>
             </div>
           </div>
           <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-[#a57b3f]/10 transition-colors">

@@ -2,22 +2,19 @@ import React, { useMemo } from 'react'
 import {
   X,
   Phone,
-  MessageSquare,
   PackagePlus,
   Truck,
   IndianRupee,
   RotateCcw,
 } from 'lucide-react'
-import type {
-  Party,
-  PartyStats,
-  ReceiptWithParty,
-  DispatchWithParty,
-  PaymentWithParty,
-  RolaReturnWithParty,
-} from '../../types'
-import { fmtDate, fmtKg, fmtMoney } from '../../types'
-import { sharePartyKhata, shareDispatchSlip, shareReceiptSlip } from '../../lib/whatsapp'
+import type { Party, PartyStats } from '../types'
+import type { ReceiptWithParty } from '../../receiving/types'
+import type { DispatchWithParty } from '../../dispatch/types'
+import type { PaymentWithParty } from '../../payments/types'
+import type { RolaReturnWithParty } from '../../rola/types'
+import { fmtDate } from '../../../utils/date'
+import { fmtKg, fmtMoney } from '../../../utils/format'
+
 
 interface PartyKhataModalProps {
   isOpen: boolean
@@ -46,23 +43,25 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
   payments,
   rolaReturns,
 }) => {
-  if (!isOpen || !party) return null
+
+
+  const partyId = party?.id
 
   const partyReceipts = useMemo(
-    () => receipts.filter((r) => r.party_id === party.id),
-    [receipts, party.id]
+    () => partyId ? receipts.filter((r) => r.party_id === partyId) : [],
+    [receipts, partyId]
   )
   const partyDispatches = useMemo(
-    () => dispatches.filter((d) => d.party_id === party.id),
-    [dispatches, party.id]
+    () => partyId ? dispatches.filter((d) => d.party_id === partyId) : [],
+    [dispatches, partyId]
   )
   const partyPayments = useMemo(
-    () => payments.filter((p) => p.party_id === party.id),
-    [payments, party.id]
+    () => partyId ? payments.filter((p) => p.party_id === partyId) : [],
+    [payments, partyId]
   )
   const partyRolaReturns = useMemo(
-    () => rolaReturns.filter((r) => r.party_id === party.id),
-    [rolaReturns, party.id]
+    () => partyId ? rolaReturns.filter((r) => r.party_id === partyId) : [],
+    [rolaReturns, partyId]
   )
 
   // Merge and sort all transactions newest first
@@ -75,6 +74,8 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
     ]
     return items.sort((a, b) => (a.date < b.date ? 1 : -1))
   }, [partyReceipts, partyDispatches, partyPayments, partyRolaReturns])
+
+  if (!isOpen || !party) return null
 
   const safeStats: PartyStats = stats || {
     rolaPending: 0,
@@ -92,11 +93,12 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
     remainingGapcha: 0,
   }
 
+
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
       <div
-        className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-[var(--color-border)] flex flex-col max-h-[92vh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150"
-        style={{ background: 'var(--color-card)' }}
+        className="relative w-full max-w-2xl bg-[var(--color-card)] rounded-[var(--radius-xl)] shadow-[var(--shadow-lg)] border border-[var(--color-border)] flex flex-col max-h-[92vh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150"
       >
         {/* ── Modal Header ────────────────────────────────────────── */}
         <div className="p-4 sm:p-5 border-b border-[var(--color-border)] bg-[var(--color-paper)] flex items-start justify-between gap-3">
@@ -125,18 +127,6 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* WhatsApp Share Button */}
-            <button
-              type="button"
-              onClick={() => sharePartyKhata(party, safeStats)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-[#25D366] hover:bg-[#20ba59] active:scale-95 transition-all shadow-xs cursor-pointer"
-              title="Share statement on WhatsApp"
-            >
-              <MessageSquare size={14} strokeWidth={2.5} />
-              <span className="hidden sm:inline">WhatsApp Statement</span>
-              <span className="sm:hidden">Share</span>
-            </button>
-
             {/* Close Button */}
             <button
               type="button"
@@ -222,7 +212,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                 return (
                   <div
                     key={`r-${r.id}-${idx}`}
-                    className="p-3 rounded-xl border border-[var(--color-border)] bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                    className="p-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] shadow-[var(--shadow-sm)] flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:shadow-[var(--shadow-md)] transition-shadow"
                   >
                     <div className="flex items-start gap-2.5">
                       <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
@@ -259,14 +249,6 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                           {fmtDate(r.date)}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => shareReceiptSlip(r, party)}
-                        className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 active:scale-95 transition-all cursor-pointer"
-                        title="Share on WhatsApp"
-                      >
-                        <MessageSquare size={15} />
-                      </button>
                     </div>
                   </div>
                 )
@@ -278,7 +260,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                 return (
                   <div
                     key={`d-${d.id}-${idx}`}
-                    className="p-3 rounded-xl border border-[var(--color-border)] bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                    className="p-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] shadow-[var(--shadow-sm)] flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:shadow-[var(--shadow-md)] transition-shadow"
                   >
                     <div className="flex items-start gap-2.5">
                       <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
@@ -322,14 +304,6 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                           {fmtDate(d.date)}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => shareDispatchSlip(d, party)}
-                        className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 active:scale-95 transition-all cursor-pointer"
-                        title="Share on WhatsApp"
-                      >
-                        <MessageSquare size={15} />
-                      </button>
                     </div>
                   </div>
                 )
@@ -340,7 +314,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                 return (
                   <div
                     key={`p-${pay.id}-${idx}`}
-                    className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/50 shadow-2xs flex items-center justify-between gap-2"
+                    className="p-3 rounded-[var(--radius-lg)] border border-emerald-200 bg-emerald-50/50 shadow-[var(--shadow-sm)] flex items-center justify-between gap-2 hover:shadow-[var(--shadow-md)] transition-shadow"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800 flex items-center justify-center shrink-0">
@@ -375,7 +349,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                 return (
                   <div
                     key={`ro-${ro.id}-${idx}`}
-                    className="p-3 rounded-xl border border-purple-200 bg-purple-50/40 shadow-2xs flex items-center justify-between gap-2"
+                    className="p-3 rounded-[var(--radius-lg)] border border-purple-200 bg-purple-50/40 shadow-[var(--shadow-sm)] flex items-center justify-between gap-2 hover:shadow-[var(--shadow-md)] transition-shadow"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-lg bg-purple-100 border border-purple-300 text-purple-800 flex items-center justify-center shrink-0">

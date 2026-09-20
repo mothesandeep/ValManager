@@ -9,7 +9,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
+const appPin = sessionStorage.getItem('KASAB_MASTER_PIN') || ''
+
 export const supabase = createClient(
   supabaseUrl ?? '',
-  supabaseAnonKey ?? ''
+  supabaseAnonKey ?? '',
+  {
+    global: {
+      headers: {
+        'x-app-pin': appPin
+      }
+    }
+  }
 )

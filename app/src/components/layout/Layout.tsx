@@ -15,7 +15,50 @@ import {
   Scale,
   SlidersHorizontal,
 } from 'lucide-react'
-import MonthSelector from '../ui/MonthSelector'
+import { Logo } from '../ui/Logo'
+import MonthSelector from '../common/MonthSelector'
+import { useSync } from '../../context/SyncContext'
+import { Cloud, CloudOff, RefreshCw } from 'lucide-react'
+
+function SyncIndicator() {
+  const { isOnline, isSyncing, pendingCount } = useSync()
+
+  if (!isOnline) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-red-50 text-red-500 border border-red-100">
+        <CloudOff size={14} strokeWidth={2.5} />
+        <span className="text-[10px] font-bold tracking-wide">
+          {pendingCount > 0 ? `${pendingCount} pending` : 'Offline'}
+        </span>
+      </div>
+    )
+  }
+
+  if (isSyncing) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-50 text-blue-500 border border-blue-100">
+        <RefreshCw size={14} strokeWidth={2.5} className="animate-spin" />
+        <span className="text-[10px] font-bold tracking-wide">Syncing...</span>
+      </div>
+    )
+  }
+
+  if (pendingCount > 0) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-yellow-50 text-yellow-600 border border-yellow-200">
+        <Cloud size={14} strokeWidth={2.5} />
+        <span className="text-[10px] font-bold tracking-wide">{pendingCount} pending</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 px-1.5 sm:px-2 py-1 rounded-full bg-emerald-50 text-emerald-500 border border-emerald-100 opacity-50" title="Synced">
+      <Cloud size={14} strokeWidth={2.5} />
+      <span className="hidden sm:inline text-[10px] font-bold tracking-wide">Synced</span>
+    </div>
+  )
+}
 
 // All routes in the application
 export const ALL_NAV_ITEMS = [
@@ -23,7 +66,6 @@ export const ALL_NAV_ITEMS = [
   { to: '/parties',    label: 'Parties',          icon: Users,           desc: 'Customer directory & balances' },
   { to: '/receiving',  label: 'Receiving',        icon: PackagePlus,     desc: 'Raw yarn entry & tare weight' },
   { to: '/dispatch',   label: 'Dispatch',         icon: Truck,           desc: 'Finished kasab deliveries' },
-  { to: '/gapcha',     label: 'Gapcha / Surplus', icon: Scale,           desc: 'Extra sellable weight stock' },
   { to: '/rola',       label: 'Rola',             icon: RotateCcw,       desc: 'Empty spool returns' },
   { to: '/payments',   label: 'Payments',         icon: IndianRupee,     desc: 'Party payment receipts' },
   { to: '/expenses',   label: 'Expenses',         icon: Receipt,         desc: 'Daily business expenses' },
@@ -42,7 +84,6 @@ const PRIMARY_MOBILE_ITEMS = [
 // Secondary Modules shown inside "More" sheet — split by group
 const MORE_OPERATIONAL_ITEMS = [
   { to: '/parties',    label: 'Parties',          icon: Users,             desc: 'Customer directory & balances' },
-  { to: '/gapcha',     label: 'Gapcha / Surplus', icon: Scale,             desc: 'Extra sellable weight stock' },
   { to: '/rola',       label: 'Rola',             icon: RotateCcw,         desc: 'Empty spool returns' },
   { to: '/expenses',   label: 'Expenses',         icon: Receipt,           desc: 'Operating & machine costs' },
 ]
@@ -52,96 +93,7 @@ const MORE_ADMIN_ITEMS = [
 ]
 const MORE_MOBILE_ITEMS = [...MORE_OPERATIONAL_ITEMS, ...MORE_ADMIN_ITEMS]
 
-function KasabLogo({ size = 26 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" className="shrink-0 shadow-sm rounded-xl">
-      <defs>
-        {/* Deep, rich mahogany/black background for maximum contrast */}
-        <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#24160a" />
-          <stop offset="1" stopColor="#0B0704" />
-        </linearGradient>
-        
-        {/* Ultra-realistic Metallic Gold for the Kasab thread */}
-        <linearGradient id="goldThread" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#8A5A19" />
-          <stop offset="20%" stopColor="#FCE38A" />
-          <stop offset="40%" stopColor="#FFF2C8" />
-          <stop offset="60%" stopColor="#C48E33" />
-          <stop offset="85%" stopColor="#F4D068" />
-          <stop offset="100%" stopColor="#4A2F0B" />
-        </linearGradient>
 
-        {/* Polished wood / dark gold for the spool ends */}
-        <linearGradient id="goldDark" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#3d230e" />
-          <stop offset="30%" stopColor="#a36e26" />
-          <stop offset="70%" stopColor="#754c15" />
-          <stop offset="100%" stopColor="#261508" />
-        </linearGradient>
-
-        <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="#000" floodOpacity="0.75"/>
-        </filter>
-        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="1.5" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-      </defs>
-
-      <rect width="64" height="64" rx="16" fill="url(#bgGrad)" />
-      
-      {/* Subtle outer glow/border */}
-      <rect width="63" height="63" x="0.5" y="0.5" rx="15.5" stroke="url(#goldThread)" strokeOpacity="0.25" />
-      <rect width="61" height="61" x="1.5" y="1.5" rx="14.5" stroke="#FFFFFF" strokeOpacity="0.04" />
-
-      <g transform="translate(18, 12)" filter="url(#dropShadow)">
-        
-        {/* Main Thread Body (Cylinder) */}
-        <path d="M 6,6 L 6,34 A 8 2.5 0 0 0 22 34 L 22,6 Z" fill="url(#goldThread)" />
-        
-        {/* Horizontal Thread Texture Lines for 3D realism */}
-        <path d="M 6,10 A 8 2.5 0 0 0 22 10" fill="none" stroke="#684210" strokeWidth="0.8" opacity="0.8" />
-        <path d="M 6,14 A 8 2.5 0 0 0 22 14" fill="none" stroke="#FFFFFF" strokeWidth="0.5" opacity="0.5" />
-        <path d="M 6,18 A 8 2.5 0 0 0 22 18" fill="none" stroke="#684210" strokeWidth="0.8" opacity="0.8" />
-        <path d="M 6,22 A 8 2.5 0 0 0 22 22" fill="none" stroke="#FFFFFF" strokeWidth="0.5" opacity="0.5" />
-        <path d="M 6,26 A 8 2.5 0 0 0 22 26" fill="none" stroke="#684210" strokeWidth="0.8" opacity="0.8" />
-        <path d="M 6,30 A 8 2.5 0 0 0 22 30" fill="none" stroke="#FFFFFF" strokeWidth="0.5" opacity="0.5" />
-
-        {/* Spool Bottom Flange */}
-        <path d="M 2,33 C 2,30.5 26,30.5 26,33 L 26,35.5 C 26,38 2,38 2,35.5 Z" fill="url(#goldDark)" />
-        {/* Spool Bottom Flange Hole */}
-        <ellipse cx="14" cy="36" rx="3.5" ry="1.2" fill="#140C05" />
-        
-        {/* Spool Top Flange */}
-        <path d="M 2,5 C 2,2.5 26,2.5 26,5 L 26,7.5 C 26,10 2,10 2,7.5 Z" fill="url(#goldDark)" />
-        
-        {/* Spool Top Inner Depth & Hole */}
-        <ellipse cx="14" cy="5" rx="7.5" ry="2.2" fill="#211309" />
-        <ellipse cx="14" cy="5.5" rx="3" ry="1" fill="#0A0602" />
-
-        {/* Elegant unwinding thread looping around */}
-        <path 
-          d="M 22,22 C 37,20 40,40 25,43" 
-          fill="none" 
-          stroke="url(#goldThread)" 
-          strokeWidth="2.5" 
-          strokeLinecap="round" 
-          filter="url(#glow)"
-        />
-        {/* Bright highlight on the unwinding thread */}
-        <path 
-          d="M 22,22 C 37,20 40,40 25,43" 
-          fill="none" 
-          stroke="#FFFFFF" 
-          strokeWidth="0.8" 
-          strokeLinecap="round" 
-          opacity="0.6"
-        />
-      </g>
-    </svg>
-  )
-}
 
 export default function Layout() {
   const location = useLocation()
@@ -183,19 +135,16 @@ export default function Layout() {
     >
       {/* ── Top Header ────────────────────────────────────────────── */}
       <header
-        className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 py-2 shrink-0 gap-3 min-h-[56px] bg-white/80 backdrop-blur-xl border-b border-gray-100 shadow-[0_2px_20px_rgba(0,0,0,0.02)]"
+        className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 pt-[max(env(safe-area-inset-top),2.5rem)] pb-2 shrink-0 gap-3 min-h-[56px] bg-white/80 backdrop-blur-xl border-b border-gray-100 shadow-[0_2px_20px_rgba(0,0,0,0.02)]"
       >
-        <div className="flex items-center gap-2.5 min-w-0 shrink-0">
-          <KasabLogo size={28} />
-          <h1
-            className="text-sm sm:text-lg font-black text-gray-900 tracking-tight whitespace-nowrap hidden xs:block"
-          >
-            Kasab Val Manager
-          </h1>
+        <div className="flex items-center min-w-0 shrink-0 cursor-pointer" onClick={() => navigate('/')}>
+          <Logo size={32} showText={true} />
         </div>
 
-        {/* Small Compact MonthSelector in Header */}
-        <MonthSelector />
+        <div className="flex items-center gap-3">
+          <SyncIndicator />
+          <MonthSelector />
+        </div>
       </header>
 
       {/* ── Main Layout Body ───────────────────────────────────────── */}
@@ -232,7 +181,7 @@ export default function Layout() {
         </nav>
 
         {/* ── Main content view ───────── */}
-        <main className="flex-1 p-4 sm:p-6 pb-24 sm:pb-8 max-w-6xl w-full flex flex-col gap-4 sm:gap-5">
+        <main className="flex-1 p-4 sm:p-6 pb-32 sm:pb-8 max-w-6xl w-full flex flex-col gap-4 sm:gap-5">
           <Outlet />
         </main>
       </div>
@@ -383,7 +332,7 @@ export default function Layout() {
 
       {/* ── Mobile 5-Item Bottom Bar ───────────────────────────────── */}
       <nav
-        className="sm:hidden fixed bottom-0 left-0 right-0 grid grid-cols-5 z-40 bg-white/95 backdrop-blur-2xl border-t border-gray-100 shadow-[0_-8px_30px_rgba(0,0,0,0.04)]"
+        className="sm:hidden fixed bottom-0 left-0 right-0 grid grid-cols-5 z-40 bg-white/85 backdrop-blur-2xl border-t border-gray-100 shadow-[0_-8px_30px_rgba(0,0,0,0.04)]"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}

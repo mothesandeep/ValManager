@@ -10,8 +10,9 @@ import {
   type TarRateConfig,
   getPartyBigRolaMap,
   savePartyBigRolaWeight,
-} from '../lib/settings'
-import type { Party } from '../types'
+} from '../features/settings/utils'
+import type { Party } from '../features/parties/types'
+import { PageHeader } from '../components/ui/PageHeader'
 
 // ── Small reusable label/input pair ─────────────────────────────────────────
 function SettingRow({
@@ -49,13 +50,13 @@ function SettingRow({
 // ── Card wrapper ─────────────────────────────────────────────────────────────
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-[24px] p-6 sm:p-7 bg-white shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100 relative overflow-hidden">
+    <div className="rounded-[var(--radius-xl)] p-6 sm:p-7 bg-[var(--color-card)] shadow-[var(--shadow-sm)] border border-[var(--color-border)] relative overflow-hidden transition-all hover:shadow-[var(--shadow-md)]">
       <div className="mb-6">
-        <h2 className="text-[19px] font-black text-gray-900 tracking-tight mb-1">
+        <h2 className="text-[19px] font-black text-[var(--color-ink)] tracking-tight mb-1">
           {title}
         </h2>
         {subtitle && (
-          <p className="text-[13px] font-medium text-gray-500 leading-relaxed max-w-lg">
+          <p className="text-[13px] font-medium text-[var(--color-ink-soft)] leading-relaxed max-w-lg">
             {subtitle}
           </p>
         )}
@@ -181,14 +182,10 @@ export default function Settings() {
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto pb-12 animate-in fade-in duration-500">
-      <div className="px-1">
-        <h1 className="text-[28px] font-black tracking-tight text-gray-900 mb-1.5">
-          Settings
-        </h1>
-        <p className="text-[14px] font-medium text-gray-500 leading-relaxed">
-          Configure default weights and rates. These will apply automatically across all receiving and dispatch entries.
-        </p>
-      </div>
+      <PageHeader
+        title="Settings"
+        description="Configure default weights and rates. These will apply automatically across all receiving and dispatch entries."
+      />
 
       {/* ── 1. Global Weights ─────────────────────────────────────────────── */}
       <Card title="Default Weights" subtitle="The baseline configuration for all new entries.">

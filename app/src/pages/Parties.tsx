@@ -5,8 +5,6 @@ import {
   Trash2,
   Phone,
   MapPin,
-  Check,
-  MessageSquare,
   BookOpen,
   X,
 } from 'lucide-react'
@@ -18,23 +16,17 @@ import { fetchRolaReturns } from '../lib/api/rola'
 import { computePartyStats } from '../lib/api/stats'
 
 
-import type {
-  Party,
-  PartyStats,
-  ReceiptWithParty,
-  DispatchWithParty,
-  PaymentWithParty,
-  RolaReturnWithParty,
-} from '../types'
-import { fmtMoney } from '../types'
-import { SectionHeader } from '../components/ui/SectionHeader'
+import type { Party, PartyStats } from '../features/parties/types'
+import type { ReceiptWithParty } from '../features/receiving/types'
+import type { DispatchWithParty } from '../features/dispatch/types'
+import type { PaymentWithParty } from '../features/payments/types'
+import type { RolaReturnWithParty } from '../features/rola/types'
+import { fmtMoney } from '../utils/format'
+import { PageHeader } from '../components/ui/PageHeader'
 import { Button } from '../components/ui/Button'
-import { Field } from '../components/ui/Field'
-import { TextInput } from '../components/ui/TextInput'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ConfirmDelete } from '../components/ui/ConfirmDelete'
-import PartyKhataModal from '../components/ui/PartyKhataModal'
-import { sharePartyKhata } from '../lib/whatsapp'
+import PartyKhataModal from '../features/parties/components/PartyKhataModal'
 
 interface PartyFormState {
   id: string | null
@@ -193,9 +185,18 @@ export default function Parties() {
 
   return (
     <div>
-      <SectionHeader
+      <PageHeader
         title="Parties"
-        subtitle="Party management, material standing, and statement overview"
+        description="Party management, material standing, and statement overview"
+        actions={
+          !form && (
+            <div className="hidden sm:block">
+              <Button onClick={startAdd} variant="primary">
+                <Plus size={18} strokeWidth={2.5} /> New Party
+              </Button>
+            </div>
+          )
+        }
       />
 
       {errorMsg && (
@@ -221,24 +222,24 @@ export default function Parties() {
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="rounded-[24px] p-5 h-48 animate-pulse bg-white border border-gray-100 shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)]"
+                  className="rounded-[var(--radius-xl)] p-5 h-48 animate-pulse bg-[var(--color-card)] border border-[var(--color-border)] shadow-[var(--shadow-sm)]"
                 />
               ))}
             </div>
           ) : parties.length === 0 ? (
             <EmptyState text="No parties yet. Add the first party to start tracking their work." />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
               {parties.map((p) => {
                 const s = stats[p.id] || { rolaPending: 0, balance: 0 }
                 return (
                   <div
                     key={p.id}
-                    className="rounded-[24px] p-5 bg-white border border-gray-100/80 shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-8px_rgba(0,0,0,0.08)] flex flex-col justify-between transition-all group relative overflow-hidden"
+                    className="rounded-[var(--radius-xl)] p-5 bg-[var(--color-card)] border border-[var(--color-border)] shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] hover:border-[var(--color-brass-soft)] flex flex-col justify-between transition-all group relative overflow-hidden"
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2 mb-3">
-                        <h3 className="font-extrabold text-[18px] leading-tight text-gray-900 tracking-tight">
+                        <h3 className="font-bold text-lg leading-tight text-[var(--color-ink)] tracking-tight">
                           {p.name}
                         </h3>
                         <div className="flex items-center gap-1 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
@@ -327,23 +328,14 @@ export default function Parties() {
                         </div>
                       </div>
 
-                      {/* ── 📖 Party Khata / Passbook & WhatsApp Action Bar ─ */}
-                      <div className="flex items-center gap-3 mt-5">
+                      {/* ── 📖 Party Khata / Passbook ─ */}
+                      <div className="flex items-center mt-5">
                         <button
                           type="button"
                           onClick={() => setActiveKhataParty(p)}
                           className="flex-1 py-3 px-4 rounded-xl bg-[#a57b3f]/10 hover:bg-[#a57b3f]/20 text-[#a57b3f] text-[13px] font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
                         >
                           <BookOpen size={16} strokeWidth={2.5} /> Statement / Khata
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => sharePartyKhata(p, s)}
-                          className="w-12 h-12 rounded-xl text-white bg-gradient-to-b from-[#25D366] to-[#128C7E] hover:opacity-90 active:scale-95 transition-all cursor-pointer shrink-0 shadow-[0_4px_12px_rgba(37,211,102,0.3)] flex items-center justify-center"
-                          title="Share statement on WhatsApp"
-                          aria-label="Share statement on WhatsApp"
-                        >
-                          <MessageSquare size={20} strokeWidth={2.5} />
                         </button>
                       </div>
                     </div>
@@ -357,18 +349,19 @@ export default function Parties() {
 
       {/* ── Add / Edit Form Modal ──────────────────────────────────────── */}
       {form && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-md sm:items-center sm:justify-center p-0 sm:p-4 transition-all">
-          <div className="bg-[#fcfcfb] w-full sm:w-[480px] rounded-t-[24px] sm:rounded-3xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:slide-in-from-bottom-6 duration-400 ease-out max-h-[90dvh] overflow-y-auto">
-            <div className="flex justify-center pt-3 pb-1 bg-white shrink-0 sticky top-0 z-10">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 transition-all">
+          <div className="bg-[#fcfcfb] w-full sm:max-w-[480px] rounded-t-[24px] sm:rounded-2xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:zoom-in-95 duration-300 ease-out max-h-[90dvh] sm:max-h-[85dvh] overflow-y-auto">
+            {/* Mobile drag handle */}
+            <div className="sm:hidden flex justify-center pt-3 pb-1 bg-white shrink-0 sticky top-0 z-10">
               <div className="w-12 h-1.5 bg-gray-200 rounded-full"></div>
             </div>
             
-            <div className="px-6 pb-4 pt-2 bg-white flex justify-between items-start shrink-0 sticky top-[20px] z-10 border-b border-gray-100">
+            <div className="px-6 pb-4 pt-4 sm:pt-6 bg-white flex justify-between items-start shrink-0 sticky top-0 sm:top-0 z-10 border-b border-gray-100">
               <div>
                 <p className="text-[10px] font-extrabold tracking-widest text-[#a57b3f]/70 uppercase mb-1.5">
                   {form.id ? 'EDIT PARTY' : 'NEW PARTY'}
                 </p>
-                <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
                   Party Details
                 </h2>
               </div>
@@ -473,11 +466,11 @@ export default function Parties() {
         </div>
       )}
 
-      {/* Floating Action Button */}
+      {/* Floating Action Button - Mobile Only */}
       {!form && (
         <button
           onClick={startAdd}
-          className="fixed bottom-[80px] right-5 sm:right-8 bg-gradient-to-b from-[#b88f4b] to-[#a57b3f] hover:from-[#c29a56] hover:to-[#b38848] text-white px-6 py-4 rounded-full shadow-[0_8px_30px_-8px_rgba(165,123,63,0.5)] hover:shadow-[0_12px_40px_-8px_rgba(165,123,63,0.6)] flex items-center gap-2.5 font-black transition-all active:scale-95 z-40 border border-[#a57b3f]/50 hover:-translate-y-1"
+          className="sm:hidden fixed bottom-[80px] right-5 bg-gradient-to-b from-[#b88f4b] to-[#a57b3f] hover:from-[#c29a56] hover:to-[#b38848] text-white px-6 py-4 rounded-full shadow-[0_8px_30px_-8px_rgba(165,123,63,0.5)] flex items-center gap-2.5 font-black transition-all active:scale-95 z-40 border border-[#a57b3f]/50"
         >
           <Plus size={22} strokeWidth={3} /> <span className="tracking-wide">Add Party</span>
         </button>
