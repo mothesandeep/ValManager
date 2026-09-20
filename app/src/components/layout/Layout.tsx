@@ -12,7 +12,6 @@ import {
   MoreHorizontal,
   X,
   ChevronRight,
-  Scale,
   SlidersHorizontal,
 } from 'lucide-react'
 import { Logo } from '../ui/Logo'
