@@ -2,7 +2,7 @@ import { supabase } from '../supabase'
 import type { Party } from '../../features/parties/types'
 
 
-import { enqueueMutation } from '../offline/sync'
+import { enqueueMutation, isNetworkError } from '../offline/sync'
 import { getPendingMutations, mergePendingMutations } from '../offline/db'
 
 // ── Parties ───────────────────────────────────────────────────────────────────
@@ -18,8 +18,6 @@ export async function fetchParties(): Promise<Party[]> {
     serverData = data ?? []
   } catch (err) {
     if (!navigator.onLine) {
-      // In a real PWA with NetworkFirst, the fetch might still succeed from cache.
-      // If it throws, we just start with empty and let local merge happen.
       console.warn('Offline: Could not fetch parties from server, relying on cache/local')
     } else {
       throw err
@@ -55,8 +53,11 @@ export async function insertParty(
     if (error) throw error
     return data
   } catch (err) {
-    await enqueueMutation('parties', 'INSERT', id, partyData)
-    return partyData
+    if (isNetworkError(err)) {
+      await enqueueMutation('parties', 'INSERT', id, partyData)
+      return partyData
+    }
+    throw err
   }
 }
 
@@ -73,7 +74,11 @@ export async function updateParty(
     const { error } = await supabase.from('parties').update(payload).eq('id', id)
     if (error) throw error
   } catch (err) {
-    await enqueueMutation('parties', 'UPDATE', id, payload)
+    if (isNetworkError(err)) {
+      await enqueueMutation('parties', 'UPDATE', id, payload)
+      return
+    }
+    throw err
   }
 }
 
@@ -87,7 +92,11 @@ export async function deleteParty(id: string): Promise<void> {
     const { error } = await supabase.from('parties').delete().eq('id', id)
     if (error) throw error
   } catch (err) {
-    await enqueueMutation('parties', 'DELETE', id, null)
+    if (isNetworkError(err)) {
+      await enqueueMutation('parties', 'DELETE', id, null)
+      return
+    }
+    throw err
   }
 }
 

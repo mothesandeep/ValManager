@@ -2,7 +2,7 @@ import { supabase } from '../supabase'
 import type { Expense } from '../../features/expenses/types'
 
 
-import { enqueueMutation } from '../offline/sync'
+import { enqueueMutation, isNetworkError } from '../offline/sync'
 import { getPendingMutations, mergePendingMutations } from '../offline/db'
 
 // ── Expenses ──────────────────────────────────────────────────────────────────
@@ -43,7 +43,11 @@ export async function insertExpense(payload: ExpensePayload): Promise<void> {
     const { error } = await supabase.from('expenses').insert(expenseData)
     if (error) throw error
   } catch (err) {
-    await enqueueMutation('expenses', 'INSERT', id, expenseData)
+    if (isNetworkError(err)) {
+      await enqueueMutation('expenses', 'INSERT', id, expenseData)
+      return
+    }
+    throw err
   }
 }
 
@@ -63,7 +67,11 @@ export async function updateExpense(
       .eq('id', id)
     if (error) throw error
   } catch (err) {
-    await enqueueMutation('expenses', 'UPDATE', id, payload)
+    if (isNetworkError(err)) {
+      await enqueueMutation('expenses', 'UPDATE', id, payload)
+      return
+    }
+    throw err
   }
 }
 
@@ -77,6 +85,10 @@ export async function deleteExpense(id: string): Promise<void> {
     const { error } = await supabase.from('expenses').delete().eq('id', id)
     if (error) throw error
   } catch (err) {
-    await enqueueMutation('expenses', 'DELETE', id, null)
+    if (isNetworkError(err)) {
+      await enqueueMutation('expenses', 'DELETE', id, null)
+      return
+    }
+    throw err
   }
 }

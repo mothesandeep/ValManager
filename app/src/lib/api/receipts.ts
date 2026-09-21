@@ -2,7 +2,7 @@ import { supabase } from '../supabase'
 import type { Receipt, ReceiptWithParty } from '../../features/receiving/types'
 
 
-import { enqueueMutation } from '../offline/sync'
+import { enqueueMutation, isNetworkError } from '../offline/sync'
 import { getPendingMutations, mergePendingMutations } from '../offline/db'
 
 // ── Receipts ──────────────────────────────────────────────────────────────────
@@ -44,7 +44,11 @@ export async function insertReceipt(payload: ReceiptPayload): Promise<void> {
     const { error } = await supabase.from('receipts').insert(receiptData)
     if (error) throw error
   } catch (err) {
-    await enqueueMutation('receipts', 'INSERT', id, receiptData)
+    if (isNetworkError(err)) {
+      await enqueueMutation('receipts', 'INSERT', id, receiptData)
+      return
+    }
+    throw err
   }
 }
 
@@ -71,7 +75,11 @@ export async function updateReceipt(
     const { error } = await supabase.from('receipts').update(updateData).eq('id', id)
     if (error) throw error
   } catch (err) {
-    await enqueueMutation('receipts', 'UPDATE', id, updateData)
+    if (isNetworkError(err)) {
+      await enqueueMutation('receipts', 'UPDATE', id, updateData)
+      return
+    }
+    throw err
   }
 }
 
@@ -85,7 +93,11 @@ export async function deleteReceipt(id: string): Promise<void> {
     const { error } = await supabase.from('receipts').delete().eq('id', id)
     if (error) throw error
   } catch (err) {
-    await enqueueMutation('receipts', 'DELETE', id, null)
+    if (isNetworkError(err)) {
+      await enqueueMutation('receipts', 'DELETE', id, null)
+      return
+    }
+    throw err
   }
 }
 

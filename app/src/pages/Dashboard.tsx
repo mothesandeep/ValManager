@@ -13,7 +13,6 @@ import { fetchReceipts } from '../lib/api/receipts'
 import { fetchDispatches } from '../lib/api/dispatch'
 import { fetchExpenses } from '../lib/api/expenses'
 import { fetchPayments } from '../lib/api/payments'
-import { fetchRolaReturns } from '../lib/api/rola'
 import { computePartyStats } from '../lib/api/stats'
 
 
@@ -25,6 +24,7 @@ import type { Expense } from '../features/expenses/types'
 import { fmtDate } from '../utils/date'
 import { fmtKg, fmtMoney } from '../utils/format'
 import { PageHeader } from '../components/ui/PageHeader'
+import { EmptyState } from '../components/ui/EmptyState'
 
 const isRolaEntry = (d: DispatchWithParty) => d.dispatch_type === 'Kali' || d.dispatch_type === 'Rola'
 
@@ -77,14 +77,12 @@ export default function Dashboard() {
           dispatchesData,
           expensesData,
           paymentsData,
-          rolaData,
-        ] = await Promise.all([
+          ] = await Promise.all([
           fetchParties(),
           fetchReceipts(),
           fetchDispatches(),
           fetchExpenses(),
           fetchPayments(),
-          fetchRolaReturns(),
         ])
 
         setParties(partiesData)
@@ -95,7 +93,6 @@ export default function Dashboard() {
         const computedStats = computePartyStats(
           partiesData,
           receiptsData,
-          rolaData,
           dispatchesData,
           paymentsData
         )
@@ -125,10 +122,10 @@ export default function Dashboard() {
   )
 
   const monthDispatches = filterByMonth(dispatches)
-  const monthDispatchNet = monthDispatches.reduce((sum, d) => {
-    const isRola = d.dispatch_type === 'Kali' || d.dispatch_type === 'Rola'
-    return sum + (isRola ? Number(d.bore_gross_weight) || 0 : Number(d.net_val_weight) || 0)
-  }, 0)
+  const monthDispatchNet = monthDispatches.reduce(
+    (sum, d) => sum + (Number(d.net_val_weight) || 0),
+    0
+  )
 
   const monthReceipts = filterByMonth(receipts)
   const monthReceivedNet = monthReceipts.reduce((sum, r) => sum + (Number(r.net_weight) || 0), 0)
@@ -243,9 +240,9 @@ export default function Dashboard() {
             <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
               <Wallet size={16} className="text-amber-600" />
             </div>
-            <div className="text-[10px] sm:text-[11px] font-bold text-gray-500 uppercase tracking-widest leading-tight">
-              Baaki<br/>Milna Hai
-            </div>
+            <h2 className="text-[12px] font-black text-gray-500 uppercase tracking-widest leading-[1.15] opacity-80">
+              Balance<br/>Due
+            </h2>
           </div>
           <div>
             {loading ? (
@@ -264,9 +261,9 @@ export default function Dashboard() {
             <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
               <TrendingUp size={16} className="text-emerald-600" />
             </div>
-            <div className="text-[10px] sm:text-[11px] font-bold text-gray-500 uppercase tracking-widest leading-tight">
-              Is Mahine<br/>Kamaai
-            </div>
+            <h2 className="text-[12px] font-black text-[#58a176] uppercase tracking-widest leading-[1.15] opacity-80">
+              Monthly<br/>Earnings
+            </h2>
           </div>
           <div>
             {loading ? (
@@ -284,10 +281,10 @@ export default function Dashboard() {
       {/* 4 Secondary Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { label: 'Val Bheja', value: fmtKg(monthDispatchNet), sub: null, color: 'text-gray-900' },
-          { label: 'Kasab Aaya', value: fmtKg(monthReceivedNet), sub: null, color: 'text-[var(--color-brass)]' },
-          { label: 'Rola Pending', value: `${rolaPending} pcs`, sub: 'parties ke paas', color: rolaPending > 0 ? 'text-[var(--color-brass)]' : 'text-gray-400' },
-          { label: 'Kharcha', value: fmtMoney(monthExpenses), sub: null, color: monthExpenses > 0 ? 'text-[var(--color-due)]' : 'text-gray-400' },
+          { label: 'Val Dispatched', value: fmtKg(monthDispatchNet), sub: null, color: 'text-gray-900' },
+          { label: 'Kasab Received', value: fmtKg(monthReceivedNet), sub: null, color: 'text-[var(--color-brass)]' },
+          { label: 'Rola Pending', value: `${rolaPending} pcs`, sub: 'with parties', color: rolaPending > 0 ? 'text-[var(--color-brass)]' : 'text-gray-400' },
+          { label: 'Expenses', value: fmtMoney(monthExpenses), sub: null, color: monthExpenses > 0 ? 'text-[var(--color-due)]' : 'text-gray-400' },
         ].map(({ label, value, sub, color }) => (
           <div
             key={label}
@@ -444,9 +441,8 @@ export default function Dashboard() {
               ))}
             </div>
           ) : recentChallanGroups.length === 0 ? (
-            <div className="rounded-[24px] border-2 border-dashed border-gray-200 py-10 flex flex-col items-center justify-center text-center">
-              <Truck size={32} className="text-gray-300 mb-3" />
-              <div className="text-[13px] font-bold text-gray-500">No dispatch entries this month</div>
+            <div className="py-6">
+              <EmptyState icon={Truck} text="No dispatch entries this month. Entries will appear here once recorded." />
             </div>
           ) : (
             <div className="bg-white rounded-[24px] shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden divide-y divide-gray-100/80">
@@ -513,7 +509,7 @@ export default function Dashboard() {
                     {group.totalAmount > 0 && (
                       <div className="flex flex-col text-right shrink-0 bg-green-50/50 px-2.5 py-1 rounded-lg border border-green-100/50">
                         <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-600/70 mb-0.5">
-                          Paisa
+                          Amount
                         </span>
                         <span className="text-[15px] font-black tabular-nums tracking-tight text-emerald-600">
                           {fmtMoney(group.totalAmount)}

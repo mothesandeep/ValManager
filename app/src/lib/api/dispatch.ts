@@ -2,7 +2,7 @@ import { supabase } from '../supabase'
 import type { Dispatch, DispatchWithParty } from '../../features/dispatch/types'
 
 
-import { enqueueMutation } from '../offline/sync'
+import { enqueueMutation, isNetworkError } from '../offline/sync'
 import { getPendingMutations, mergePendingMutations } from '../offline/db'
 
 // ── Dispatches ────────────────────────────────────────────────────────────────
@@ -43,7 +43,11 @@ export async function insertDispatch(payload: DispatchPayload): Promise<void> {
     const { error } = await supabase.from('dispatches').insert(dispatchData)
     if (error) throw error
   } catch (err) {
-    await enqueueMutation('dispatches', 'INSERT', id, dispatchData)
+    if (isNetworkError(err)) {
+      await enqueueMutation('dispatches', 'INSERT', id, dispatchData)
+      return
+    }
+    throw err
   }
 }
 
@@ -70,7 +74,11 @@ export async function updateDispatch(
       .eq('id', id)
     if (error) throw error
   } catch (err) {
-    await enqueueMutation('dispatches', 'UPDATE', id, payload)
+    if (isNetworkError(err)) {
+      await enqueueMutation('dispatches', 'UPDATE', id, payload)
+      return
+    }
+    throw err
   }
 }
 
@@ -84,7 +92,11 @@ export async function deleteDispatch(id: string): Promise<void> {
     const { error } = await supabase.from('dispatches').delete().eq('id', id)
     if (error) throw error
   } catch (err) {
-    await enqueueMutation('dispatches', 'DELETE', id, null)
+    if (isNetworkError(err)) {
+      await enqueueMutation('dispatches', 'DELETE', id, null)
+      return
+    }
+    throw err
   }
 }
 
@@ -95,7 +107,7 @@ export async function updateDispatchPartyByChallan(
   excludeId: string
 ): Promise<number> {
   const { data, error } = await supabase
-    .from('dispatch')
+    .from('dispatches')
     .update({ party_id: newPartyId })
     .eq('challan_no', challanNo)
     .neq('id', excludeId)
@@ -110,7 +122,7 @@ export async function updateDispatchDateByChallan(
   excludeId: string
 ): Promise<number> {
   const { data, error } = await supabase
-    .from('dispatch')
+    .from('dispatches')
     .update({ date: newDate })
     .eq('challan_no', challanNo)
     .neq('id', excludeId)

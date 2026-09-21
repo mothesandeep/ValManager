@@ -1,19 +1,18 @@
-import { useState } from 'react'
+import { useState, Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { MonthProvider } from './context/MonthContext'
 import { SyncProvider } from './context/SyncContext'
 import Layout from './components/layout/Layout'
-import Dashboard  from './pages/Dashboard'
-import Parties    from './pages/Parties'
-import Receiving  from './pages/Receiving'
-import Dispatch   from './pages/Dispatch'
-import Rola       from './pages/Rola'
-import Payments   from './pages/Payments'
-import Expenses   from './pages/Expenses'
-import Gapcha     from './pages/Gapcha'
-import Reports    from './pages/Reports'
-import Settings   from './pages/Settings'
 import { Lock } from 'lucide-react'
+
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Parties   = lazy(() => import('./pages/Parties'))
+const Receiving = lazy(() => import('./pages/Receiving'))
+const Dispatch  = lazy(() => import('./pages/Dispatch'))
+const Payments  = lazy(() => import('./pages/Payments'))
+const Expenses  = lazy(() => import('./pages/Expenses'))
+const Reports   = lazy(() => import('./pages/Reports'))
+const Settings  = lazy(() => import('./pages/Settings'))
 
 export default function App() {
   const [pin, setPin] = useState('')
@@ -34,7 +33,8 @@ export default function App() {
             onSubmit={(e) => {
               e.preventDefault()
               const entered = pin.trim()
-              if (entered === '7878') {
+              const masterPin = import.meta.env.VITE_MASTER_PIN || '7878' // Fallback for dev if env missing
+              if (entered === masterPin) {
                 sessionStorage.setItem('KASAB_MASTER_PIN', entered)
                 window.location.reload()
               } else if (entered) {
@@ -70,20 +70,25 @@ export default function App() {
     <BrowserRouter>
       <SyncProvider>
         <MonthProvider>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route index                  element={<Dashboard />}  />
-              <Route path="parties"         element={<Parties />}    />
-              <Route path="receiving"       element={<Receiving />}  />
-              <Route path="dispatch"        element={<Dispatch />}   />
-              <Route path="gapcha"          element={<Gapcha />}     />
-              <Route path="rola"            element={<Rola />}       />
-              <Route path="payments"        element={<Payments />}   />
-              <Route path="expenses"        element={<Expenses />}   />
-              <Route path="reports"         element={<Reports />}    />
-              <Route path="settings"        element={<Settings />}   />
-            </Route>
-          </Routes>
+          <Suspense fallback={
+            <div className="flex h-screen items-center justify-center bg-gray-50">
+              <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          }>
+            <Routes>
+              <Route element={<Layout />}>
+                <Route index                  element={<Dashboard />}  />
+                <Route path="parties"         element={<Parties />}    />
+                <Route path="receiving"       element={<Receiving />}  />
+                <Route path="dispatch"        element={<Dispatch />}   />
+
+                <Route path="payments"        element={<Payments />}   />
+                <Route path="expenses"        element={<Expenses />}   />
+                <Route path="reports"         element={<Reports />}    />
+                <Route path="settings"        element={<Settings />}   />
+              </Route>
+            </Routes>
+          </Suspense>
         </MonthProvider>
       </SyncProvider>
     </BrowserRouter>

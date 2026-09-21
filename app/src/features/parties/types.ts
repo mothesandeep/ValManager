@@ -16,11 +16,6 @@ export interface PartyStats {
   balance: number
   totalReceivedWeight: number
   unprocessedKasabWeight: number
-  reconciledInputWeight: number
-  reconciledOutputWeight: number
   totalDispatchWeight: number
   totalDispatchValue: number
-  gapchaWeight: number
-  gapchaSold: number
-  remainingGapcha: number
 }

@@ -12,8 +12,8 @@ export interface Dispatch {
   net_val_weight: number | null
   rate_per_kg: number | null
   amount: number | null
+  bori_count?: number
   rola_count?: number | null
-  reconciliation_id?: string | null
   created_at: string
 }
 

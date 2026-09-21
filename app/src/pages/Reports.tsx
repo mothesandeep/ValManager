@@ -4,7 +4,6 @@ import { fetchReceipts } from '../lib/api/receipts'
 import { fetchDispatches } from '../lib/api/dispatch'
 import { fetchExpenses } from '../lib/api/expenses'
 import { fetchPayments } from '../lib/api/payments'
-import { fetchRolaReturns } from '../lib/api/rola'
 import { computePartyStats } from '../lib/api/stats'
 
 
@@ -36,14 +35,12 @@ export default function Reports() {
           dispatchesData,
           expensesData,
           paymentsData,
-          rolaData,
-        ] = await Promise.all([
+          ] = await Promise.all([
           fetchParties(),
           fetchReceipts(),
           fetchDispatches(),
           fetchExpenses(),
           fetchPayments(),
-          fetchRolaReturns(),
         ])
 
         setParties(partiesData)
@@ -54,7 +51,6 @@ export default function Reports() {
         const computed = computePartyStats(
           partiesData,
           receiptsData,
-          rolaData,
           dispatchesData,
           paymentsData
         )
@@ -74,10 +70,10 @@ export default function Reports() {
     0
   )
 
-  const monthDispatched = filterByMonth(dispatches).reduce((s, d) => {
-    const isRola = d.dispatch_type === 'Kali' || d.dispatch_type === 'Rola'
-    return s + (isRola ? Number(d.bore_gross_weight) || 0 : Number(d.net_val_weight) || 0)
-  }, 0)
+  const monthDispatched = filterByMonth(dispatches).reduce(
+    (s, d) => s + (Number(d.net_val_weight) || 0),
+    0
+  )
 
   const monthExpenses = filterByMonth(expenses).reduce(
     (s, x) => s + (Number(x.amount) || 0),

@@ -5,7 +5,6 @@ import {
   Users,
   PackagePlus,
   Truck,
-  RotateCcw,
   IndianRupee,
   Receipt,
   BarChart3,
@@ -63,9 +62,9 @@ function SyncIndicator() {
 export const ALL_NAV_ITEMS = [
   { to: '/',           label: 'Dashboard',        icon: LayoutDashboard, desc: 'Overview & quick metrics' },
   { to: '/parties',    label: 'Parties',          icon: Users,           desc: 'Customer directory & balances' },
-  { to: '/receiving',  label: 'Receiving',        icon: PackagePlus,     desc: 'Raw yarn entry & tare weight' },
+  { to: '/receiving',  label: 'Received',        icon: PackagePlus,     desc: 'Raw yarn entry & tare weight' },
   { to: '/dispatch',   label: 'Dispatch',         icon: Truck,           desc: 'Finished kasab deliveries' },
-  { to: '/rola',       label: 'Rola',             icon: RotateCcw,       desc: 'Empty spool returns' },
+
   { to: '/payments',   label: 'Payments',         icon: IndianRupee,     desc: 'Party payment receipts' },
   { to: '/expenses',   label: 'Expenses',         icon: Receipt,         desc: 'Daily business expenses' },
   { to: '/reports',    label: 'Reports',          icon: BarChart3,       desc: 'Financial & party ledgers' },
@@ -75,16 +74,16 @@ export const ALL_NAV_ITEMS = [
 // 4 Primary Mobile Tabs + More — ordered by daily workflow
 const PRIMARY_MOBILE_ITEMS = [
   { to: '/',          label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/receiving', label: 'Receiving', icon: PackagePlus     },
+  { to: '/receiving', label: 'Received', icon: PackagePlus     },
   { to: '/dispatch',  label: 'Dispatch',  icon: Truck           },
-  { to: '/payments',  label: 'Payments',  icon: IndianRupee     },
+  { to: '/expenses',  label: 'Expenses',  icon: Receipt         },
 ]
 
 // Secondary Modules shown inside "More" sheet — split by group
 const MORE_OPERATIONAL_ITEMS = [
   { to: '/parties',    label: 'Parties',          icon: Users,             desc: 'Customer directory & balances' },
-  { to: '/rola',       label: 'Rola',             icon: RotateCcw,         desc: 'Empty spool returns' },
-  { to: '/expenses',   label: 'Expenses',         icon: Receipt,           desc: 'Operating & machine costs' },
+
+  { to: '/payments',   label: 'Payments',         icon: IndianRupee,       desc: 'Party payment receipts' },
 ]
 const MORE_ADMIN_ITEMS = [
   { to: '/reports',    label: 'Reports',          icon: BarChart3,         desc: 'Summary reports & ledger' },
@@ -134,7 +133,7 @@ export default function Layout() {
     >
       {/* ── Top Header ────────────────────────────────────────────── */}
       <header
-        className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 pt-[max(env(safe-area-inset-top),2.5rem)] pb-2 shrink-0 gap-3 min-h-[56px] bg-white/80 backdrop-blur-xl border-b border-gray-100 shadow-[0_2px_20px_rgba(0,0,0,0.02)]"
+        className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2.5 shrink-0 gap-3 min-h-[56px] bg-white/80 backdrop-blur-xl border-b border-gray-100 shadow-[0_2px_20px_rgba(0,0,0,0.02)]"
       >
         <div className="flex items-center min-w-0 shrink-0 cursor-pointer" onClick={() => navigate('/')}>
           <Logo size={32} showText={true} />
@@ -150,7 +149,7 @@ export default function Layout() {
       <div className="flex flex-1" style={{ minHeight: 'calc(100dvh - 56px)' }}>
         {/* ── Sidebar (desktop) ────────────────────────────────────── */}
         <nav
-          className="hidden sm:flex flex-col gap-1 w-52 shrink-0 p-3"
+          className="hidden sm:flex flex-col gap-1 w-52 shrink-0 p-3 sticky top-[56px] h-[calc(100vh-56px)] overflow-y-auto"
           style={{ borderRight: '1px solid var(--color-border)' }}
           aria-label="Desktop Navigation"
         >

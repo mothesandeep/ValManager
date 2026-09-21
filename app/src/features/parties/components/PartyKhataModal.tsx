@@ -1,17 +1,15 @@
 import React, { useMemo } from 'react'
 import {
-  X,
   Phone,
   PackagePlus,
   Truck,
   IndianRupee,
-  RotateCcw,
+  RotateCcw
 } from 'lucide-react'
 import type { Party, PartyStats } from '../types'
 import type { ReceiptWithParty } from '../../receiving/types'
 import type { DispatchWithParty } from '../../dispatch/types'
 import type { PaymentWithParty } from '../../payments/types'
-import type { RolaReturnWithParty } from '../../rola/types'
 import { fmtDate } from '../../../utils/date'
 import { fmtKg, fmtMoney } from '../../../utils/format'
 
@@ -24,14 +22,13 @@ interface PartyKhataModalProps {
   receipts: ReceiptWithParty[]
   dispatches: DispatchWithParty[]
   payments: PaymentWithParty[]
-  rolaReturns: RolaReturnWithParty[]
+  onDataChange?: () => void
 }
 
 type TimelineItem =
   | { type: 'receipt'; date: string; data: ReceiptWithParty }
   | { type: 'dispatch'; date: string; data: DispatchWithParty }
   | { type: 'payment'; date: string; data: PaymentWithParty }
-  | { type: 'rola'; date: string; data: RolaReturnWithParty }
 
 export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
   isOpen,
@@ -41,10 +38,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
   receipts,
   dispatches,
   payments,
-  rolaReturns,
 }) => {
-
-
   const partyId = party?.id
 
   const partyReceipts = useMemo(
@@ -59,10 +53,6 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
     () => partyId ? payments.filter((p) => p.party_id === partyId) : [],
     [payments, partyId]
   )
-  const partyRolaReturns = useMemo(
-    () => partyId ? rolaReturns.filter((r) => r.party_id === partyId) : [],
-    [rolaReturns, partyId]
-  )
 
   // Merge and sort all transactions newest first
   const timeline = useMemo(() => {
@@ -70,10 +60,9 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
       ...partyReceipts.map((r) => ({ type: 'receipt' as const, date: r.date, data: r })),
       ...partyDispatches.map((d) => ({ type: 'dispatch' as const, date: d.date, data: d })),
       ...partyPayments.map((p) => ({ type: 'payment' as const, date: p.date, data: p })),
-      ...partyRolaReturns.map((ro) => ({ type: 'rola' as const, date: ro.date, data: ro })),
     ]
     return items.sort((a, b) => (a.date < b.date ? 1 : -1))
-  }, [partyReceipts, partyDispatches, partyPayments, partyRolaReturns])
+  }, [partyReceipts, partyDispatches, partyPayments])
 
   if (!isOpen || !party) return null
 
@@ -84,16 +73,9 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
     balance: 0,
     totalReceivedWeight: 0,
     unprocessedKasabWeight: 0,
-    reconciledInputWeight: 0,
-    reconciledOutputWeight: 0,
     totalDispatchWeight: 0,
     totalDispatchValue: 0,
-    gapchaWeight: 0,
-    gapchaSold: 0,
-    remainingGapcha: 0,
   }
-
-
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
@@ -101,7 +83,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
         className="relative w-full max-w-2xl bg-[var(--color-card)] rounded-[var(--radius-xl)] shadow-[var(--shadow-lg)] border border-[var(--color-border)] flex flex-col max-h-[92vh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150"
       >
         {/* ── Modal Header ────────────────────────────────────────── */}
-        <div className="p-4 sm:p-5 border-b border-[var(--color-border)] bg-[var(--color-paper)] flex items-start justify-between gap-3">
+        <div className="p-4 sm:p-5 border-b border-[var(--color-border)] bg-[var(--color-paper)] flex items-start justify-between gap-3 shrink-0">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h2
@@ -119,91 +101,51 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                 <Phone size={12} /> {party.phone}
               </p>
             )}
-            {party.address && (
-              <p className="text-xs text-[var(--color-ink-soft)] truncate mt-0.5">
-                📍 {party.address}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Close Button */}
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-[var(--color-ink-soft)] hover:bg-[var(--color-border)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
-              aria-label="Close modal"
-            >
-              <X size={20} strokeWidth={2} />
-            </button>
           </div>
         </div>
 
-        {/* ── Key Balances Summary Grid ────────────────────────────── */}
-        <div className="p-3 sm:p-4 bg-white border-b border-[var(--color-border)] grid grid-cols-2 sm:grid-cols-3 gap-2.5 shrink-0">
-          {/* Balance Due */}
-          <div
-            className="p-3 rounded-xl border flex flex-col justify-center"
-            style={{
-              background: safeStats.balance > 0 ? 'var(--color-due-bg)' : '#F0FDF4',
-              borderColor: safeStats.balance > 0 ? 'var(--color-due)' : '#86EFAC',
-            }}
-          >
-            <span className="text-[11px] font-semibold text-[var(--color-ink-soft)]">
-              Balance Due
-            </span>
-            <span
-              className="text-lg sm:text-xl font-bold tabular-nums mt-0.5"
-              style={{
-                color: safeStats.balance > 0 ? 'var(--color-due)' : '#16A34A',
-                fontFamily: 'var(--font-display)',
-              }}
-            >
-              {fmtMoney(safeStats.balance)}
-            </span>
-          </div>
+        {/* ── Summary Cards ───────────────────────────────────────── */}
+        <div className="p-4 sm:p-5 bg-[var(--color-paper)] border-b border-[var(--color-border)] shrink-0">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <div className="bg-[var(--color-card)] p-3 sm:p-4 rounded-[var(--radius-lg)] border border-[var(--color-border-soft)] shadow-[var(--shadow-sm)]">
+              <div className="text-[10px] font-extrabold text-[var(--color-ink-soft)] uppercase tracking-widest mb-1 sm:mb-1.5">
+                Pending Rola
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span
+                  className={`text-xl sm:text-2xl font-black leading-none ${safeStats.rolaPending > 0 ? 'text-[var(--color-ink)]' : 'text-[var(--color-ink-soft)]'}`}
+                >
+                  {safeStats.rolaPending}
+                </span>
+                <span className="text-[10px] font-bold text-[var(--color-ink-soft)] uppercase">
+                  pcs
+                </span>
+              </div>
+            </div>
 
-          {/* Rola Pending */}
-          <div className="p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-paper)] flex flex-col justify-center">
-            <span className="text-[11px] font-semibold text-[var(--color-ink-soft)]">
-              Rola Due
-            </span>
-            <span
-              className="text-lg sm:text-xl font-bold tabular-nums text-[var(--color-ink)] mt-0.5"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              {safeStats.rolaPending} pcs
-            </span>
-          </div>
-
-          {/* Kasab in Workshop */}
-          <div className="col-span-2 sm:col-span-1 p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-paper)] flex flex-col justify-center">
-            <span className="text-[11px] font-semibold text-[var(--color-ink-soft)]">
-              In Workshop
-            </span>
-            <span
-              className="text-lg sm:text-xl font-bold tabular-nums text-[var(--color-brass)] mt-0.5"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              {fmtKg(safeStats.unprocessedKasabWeight)}
-            </span>
+            <div className="bg-[var(--color-card)] p-3 sm:p-4 rounded-[var(--radius-lg)] border border-[var(--color-border-soft)] shadow-[var(--shadow-sm)]">
+              <div className="text-[10px] font-extrabold text-[var(--color-ink-soft)] uppercase tracking-widest mb-1 sm:mb-1.5">
+                Balance Due
+              </div>
+              <span
+                className={`text-xl sm:text-2xl font-black leading-none tracking-tight ${safeStats.balance > 0 ? 'text-red-600' : 'text-[var(--color-ink)]'}`}
+              >
+                {fmtMoney(safeStats.balance)}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* ── Transaction History (Passbook) ───────────────────────── */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2.5">
-          <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink-soft)]">
-              Transaction History ({timeline.length})
-            </h3>
-            <span className="text-[11px] text-[var(--color-ink-soft)]">
-              Newest First
-            </span>
-          </div>
-
+        {/* ── Timeline (Scrollable) ───────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 bg-[#faf9f8]" style={{ WebkitOverflowScrolling: 'touch' }}>
           {timeline.length === 0 ? (
-            <div className="py-12 text-center text-sm text-[var(--color-ink-soft)] border border-dashed rounded-xl border-[var(--color-border)]">
-              No transactions recorded yet for this party.
+            <div className="text-center py-10">
+              <div className="w-12 h-12 rounded-full bg-[var(--color-border-soft)] flex items-center justify-center mx-auto mb-3 text-[var(--color-ink-soft)]">
+                <RotateCcw size={20} />
+              </div>
+              <p className="text-sm text-[var(--color-ink-soft)] font-medium">
+                No transactions recorded yet.
+              </p>
             </div>
           ) : (
             timeline.map((item, idx) => {
@@ -221,21 +163,17 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-bold text-[var(--color-ink)]">
-                            Raw Kasab Received
+                            Kasab Received
                           </span>
                           {r.challan_no && (
                             <span className="text-[10px] px-1.5 py-0.2 rounded bg-[var(--color-border-soft)] text-[var(--color-ink-soft)] font-medium">
                               Ch #{r.challan_no}
                             </span>
                           )}
-                          {r.color && (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-medium">
-                              {r.color}
-                            </span>
-                          )}
                         </div>
-                        <div className="text-xs text-[var(--color-ink-soft)] mt-0.5">
-                          Gross: {fmtKg(r.gross_weight)} • Rola: {r.rola_count} pcs • Tare: {fmtKg(r.tare_weight)}
+                        <div className="text-xs text-[var(--color-ink-soft)] mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
+                          <span>Gross: {fmtKg(r.gross_weight)}</span>
+                          {r.rola_count > 0 && <span>Rola: {r.rola_count} pcs</span>}
                         </div>
                       </div>
                     </div>
@@ -257,6 +195,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
               if (item.type === 'dispatch') {
                 const d = item.data
                 const isKali = d.dispatch_type === 'Kali' || d.dispatch_type === 'Rola'
+                
                 return (
                   <div
                     key={`d-${d.id}-${idx}`}
@@ -269,7 +208,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-bold text-[var(--color-ink)]">
-                            {isKali ? 'Kali/Rola Dispatched' : 'Val Dispatched'}
+                            {isKali ? 'Rola Dispatched' : 'Val Dispatched'}
                           </span>
                           {d.challan_no && (
                             <span className="text-[10px] px-1.5 py-0.2 rounded bg-[var(--color-border-soft)] text-[var(--color-ink-soft)] font-medium">
@@ -284,7 +223,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                         </div>
                         <div className="text-xs text-[var(--color-ink-soft)] mt-0.5">
                           {isKali ? (
-                            `Weight: ${fmtKg(d.bore_gross_weight)}`
+                            `Weight: ${fmtKg(d.bore_gross_weight)} • Return: ${d.rola_count ?? 0} pcs`
                           ) : (
                             <>
                               Gross: {fmtKg(d.bore_gross_weight)} • Bungari: {d.bungari_count} pcs • Rate: ₹{d.rate_per_kg || 0}/kg
@@ -344,46 +283,13 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                 )
               }
 
-              if (item.type === 'rola') {
-                const ro = item.data
-                return (
-                  <div
-                    key={`ro-${ro.id}-${idx}`}
-                    className="p-3 rounded-[var(--radius-lg)] border border-purple-200 bg-purple-50/40 shadow-[var(--shadow-sm)] flex items-center justify-between gap-2 hover:shadow-[var(--shadow-md)] transition-shadow"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-purple-100 border border-purple-300 text-purple-800 flex items-center justify-center shrink-0">
-                        <RotateCcw size={16} strokeWidth={2.2} />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-purple-900">
-                          Rola Returned
-                        </div>
-                        <div className="text-xs text-purple-700 mt-0.5">
-                          {ro.rola_count} spools returned from party
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-xs font-bold text-purple-800 tabular-nums">
-                        {ro.rola_count} pcs
-                      </div>
-                      <div className="text-[10px] text-purple-600 font-medium">
-                        {fmtDate(ro.date)}
-                      </div>
-                    </div>
-                  </div>
-                )
-              }
-
               return null
             })
           )}
         </div>
 
         {/* ── Footer ──────────────────────────────────────────────── */}
-        <div className="p-3 sm:p-4 bg-[var(--color-paper)] border-t border-[var(--color-border)] flex items-center justify-between">
+        <div className="p-3 sm:p-4 bg-[var(--color-paper)] border-t border-[var(--color-border)] flex items-center justify-between shrink-0">
           <span className="text-xs text-[var(--color-ink-soft)]">
             Total {timeline.length} transactions
           </span>

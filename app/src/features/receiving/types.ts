@@ -7,8 +7,8 @@ export interface Receipt {
   tare_weight: number
   net_weight: number
   challan_no: string | null
+  bori_count?: number
   rola_count: number
-  reconciliation_id?: string | null
   status?: string | null
   created_at: string
 }

@@ -12,7 +12,6 @@ import { fetchParties, insertParty, updateParty, deleteParty } from '../lib/api/
 import { fetchReceipts } from '../lib/api/receipts'
 import { fetchDispatches } from '../lib/api/dispatch'
 import { fetchPayments } from '../lib/api/payments'
-import { fetchRolaReturns } from '../lib/api/rola'
 import { computePartyStats } from '../lib/api/stats'
 
 
@@ -20,7 +19,6 @@ import type { Party, PartyStats } from '../features/parties/types'
 import type { ReceiptWithParty } from '../features/receiving/types'
 import type { DispatchWithParty } from '../features/dispatch/types'
 import type { PaymentWithParty } from '../features/payments/types'
-import type { RolaReturnWithParty } from '../features/rola/types'
 import { fmtMoney } from '../utils/format'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Button } from '../components/ui/Button'
@@ -53,7 +51,6 @@ export default function Parties() {
   const [receipts, setReceipts] = useState<ReceiptWithParty[]>([])
   const [dispatches, setDispatches] = useState<DispatchWithParty[]>([])
   const [payments, setPayments] = useState<PaymentWithParty[]>([])
-  const [rolaReturns, setRolaReturns] = useState<RolaReturnWithParty[]>([])
   const [stats, setStats] = useState<Record<string, PartyStats>>({})
   const [loading, setLoading] = useState(true)
 
@@ -70,28 +67,14 @@ export default function Parties() {
     setLoading(true)
     setErrorMsg(null)
     try {
-      const [partiesData, receiptsData, rolaData, dispatchesData, paymentsData] =
-        await Promise.all([
-          fetchParties(),
-          fetchReceipts(),
-          fetchRolaReturns(),
-          fetchDispatches(),
-          fetchPayments(),
-        ])
+      const [partiesData, receiptsData, dispatchesData, paymentsData] = await Promise.all([fetchParties(), fetchReceipts(), fetchDispatches(), fetchPayments()])
 
       setParties(partiesData)
       setReceipts(receiptsData)
       setDispatches(dispatchesData)
       setPayments(paymentsData)
-      setRolaReturns(rolaData)
 
-      const computed = computePartyStats(
-        partiesData,
-        receiptsData,
-        rolaData,
-        dispatchesData,
-        paymentsData
-      )
+      const computed = computePartyStats(partiesData, receiptsData, dispatchesData, paymentsData)
       setStats(computed)
     } catch (err) {
       console.error('Error loading parties:', err)
@@ -104,6 +87,18 @@ export default function Parties() {
   useEffect(() => {
     void loadData()
   }, [loadData])
+
+
+  // Handle mobile hardware back button to close Khata Modal
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (window.location.hash !== '#modal' && activeKhataParty) {
+        setActiveKhataParty(null)
+      }
+    }
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [activeKhataParty])
 
   const startAdd = () => {
     setForm({ ...EMPTY_FORM })
@@ -332,7 +327,10 @@ export default function Parties() {
                       <div className="flex items-center mt-5">
                         <button
                           type="button"
-                          onClick={() => setActiveKhataParty(p)}
+                          onClick={() => {
+                          window.location.hash = 'modal'
+                          setActiveKhataParty(p)
+                        }}
                           className="flex-1 py-3 px-4 rounded-xl bg-[#a57b3f]/10 hover:bg-[#a57b3f]/20 text-[#a57b3f] text-[13px] font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
                         >
                           <BookOpen size={16} strokeWidth={2.5} /> Statement / Khata
@@ -479,13 +477,12 @@ export default function Parties() {
       {/* ── Party Khata / Passbook Modal ──────────────────────────── */}
       <PartyKhataModal
         isOpen={Boolean(activeKhataParty)}
-        onClose={() => setActiveKhataParty(null)}
+        onClose={() => { if(window.location.hash === '#modal') window.history.back(); else setActiveKhataParty(null); }}
         party={activeKhataParty}
         stats={activeKhataParty ? stats[activeKhataParty.id] || null : null}
         receipts={receipts}
         dispatches={dispatches}
         payments={payments}
-        rolaReturns={rolaReturns}
       />
     </div>
   )

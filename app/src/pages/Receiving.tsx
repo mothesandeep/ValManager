@@ -13,6 +13,7 @@ import { fmtDate, todayStr } from '../utils/date'
 import { fmtKg } from '../utils/format'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Button } from '../components/ui/Button'
+import { ConfirmDelete } from '../components/ui/ConfirmDelete'
 import { EmptyState } from '../components/ui/EmptyState'
 import { useMonth } from '../context/MonthContext'
 import { isBigRola } from '../features/receiving/calculations'
@@ -62,7 +63,7 @@ export default function Receiving() {
   })
 
   const createBlankBag = (customPerRola?: string): BagItem => ({
-    id: Math.random().toString(36).substring(2, 9),
+    id: crypto.randomUUID(),
     gross: '',
     rolaCount: '',
     perRolaGrams: customPerRola || rememberedPerRola || '200',
@@ -150,7 +151,22 @@ export default function Receiving() {
     }
   }, [searchParams, parties, isOpen, setSearchParams])
 
+
+  // Handle mobile hardware back button to close modal
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (window.location.hash !== '#modal' && isOpen) {
+        setIsOpen(false)
+        setEditingId(null)
+        setErrorMsg(null)
+      }
+    }
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [isOpen])
+
   const startAdd = () => {
+    window.location.hash = 'modal'
     setEditingId(null)
     const firstParty = parties[0]
     const initialRola = String(resolvePartyRolaWeight(firstParty))
@@ -208,9 +224,13 @@ export default function Receiving() {
 
 
   const closeForm = () => {
-    setIsOpen(false)
-    setEditingId(null)
-    setErrorMsg(null)
+    if (window.location.hash === '#modal') {
+      window.history.back()
+    } else {
+      setIsOpen(false)
+      setEditingId(null)
+      setErrorMsg(null)
+    }
   }
 
   const addBag = () => {
@@ -340,13 +360,7 @@ export default function Receiving() {
     }
   }
 
-  const [expandedChallans, setExpandedChallans] = useState<Set<string>>(new Set())
-  const toggleChallan = (key: string) =>
-    setExpandedChallans((prev) => {
-      const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
 
   const groupedReceipts = useMemo(() => {
     const groups: Record<string, {
@@ -408,7 +422,7 @@ export default function Receiving() {
   return (
     <div>
       <PageHeader
-        title="Raw Material Receiving"
+        title="Kasab Received"
         description="Record raw kasab intake, calculate net weight, and manage Normal/Big rola tare"
         actions={
           !isOpen && parties.length > 0 && (
@@ -570,8 +584,8 @@ export default function Receiving() {
 
               {/* Bags Section */}
               <div className="mb-6">
-                {/* --- MOBILE CARDS --- */}
-                <div className="sm:hidden space-y-4">
+                {/* --- MOBILE & DESKTOP CARDS --- */}
+                <div className="space-y-4">
                   {bagCalculations.map(({ bag: b, netKg }, idx) => (
                     <div key={b.id} className="bg-white border border-gray-200/60 rounded-[20px] p-5 shadow-sm relative transition-all hover:shadow-md">
 
@@ -605,8 +619,8 @@ export default function Receiving() {
 
                       {/* Inputs */}
                       <div className="flex flex-col gap-3 mb-2">
-                        <div className="flex gap-3">
-                          <div className="flex-[2]">
+                        <div className="grid grid-cols-3 sm:flex gap-3">
+                          <div className="col-span-2 sm:flex-[2]">
                             <label className="block text-[10px] font-extrabold text-gray-400 mb-1.5 uppercase tracking-widest pl-1">
                               Gross (kg) <span className="text-red-500">*</span>
                             </label>
@@ -619,13 +633,13 @@ export default function Receiving() {
                               onChange={(e) => updateBag(b.id, 'gross', e.target.value)}
                             />
                           </div>
-                          <div className="flex-1 min-w-[80px]">
+                          <div className="col-span-1 sm:flex-1 sm:min-w-[80px]">
                             <label className="block text-[10px] font-extrabold text-gray-400 mb-1.5 uppercase tracking-widest pl-1 text-center">
                               Rola
                             </label>
                             <input
                               type="number"
-                              className="w-full h-[48px] px-2 bg-gray-50 border border-gray-200/80 rounded-[14px] text-[18px] font-black tabular-nums text-gray-900 text-center placeholder:text-gray-300 focus:outline-none focus:bg-white focus:border-gray-400 focus:ring-2 focus:ring-gray-100 transition-all shadow-sm"
+                              className="w-full h-[48px] px-3 bg-gray-50 border border-gray-200/80 rounded-[14px] text-[18px] font-black tabular-nums text-gray-900 text-center placeholder:text-gray-300 focus:outline-none focus:bg-white focus:border-gray-400 focus:ring-2 focus:ring-gray-100 transition-all shadow-sm"
                               placeholder="60"
                               value={b.rolaCount}
                               onChange={(e) => updateBag(b.id, 'rolaCount', e.target.value)}
@@ -711,143 +725,7 @@ export default function Receiving() {
                   </button>
                 </div>
 
-                {/* --- DESKTOP TABLE --- */}
-                <div className="hidden sm:block">
-                  <div className="border border-gray-200/80 rounded-xl bg-white shadow-sm ring-1 ring-black/5">
-                    <table className="w-full text-left border-collapse table-fixed">
-                      <thead>
-                        <tr className="bg-gray-50/50 border-b border-gray-200/80 text-[11px] font-extrabold text-gray-400 uppercase tracking-widest">
-                          <th className="py-3 px-3 w-12 text-center">#</th>
-                          <th className="py-3 px-3 w-28">Gross (kg)</th>
-                          <th className="py-3 px-3 w-24 text-center">Rola</th>
-                          <th className="py-3 px-3 w-28 text-center">Twist</th>
-                          <th className="py-3 px-3">Color</th>
-                          <th className="py-3 px-3 w-32 text-center">Size</th>
-                          <th className="py-3 px-4 w-36 text-right">Net Kasab</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {bagCalculations.map(({ bag: b, netKg }, idx) => (
-                          <tr key={b.id} className="hover:bg-gray-50/30 transition-colors group">
-                            <td className="py-2.5 px-3 text-center align-middle">
-                              <div className="w-6 h-6 mx-auto relative flex items-center justify-center">
-                                <div className={`w-5 h-5 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-[10px] font-black transition-opacity ${bags.length > 1 ? 'group-hover:opacity-0' : ''}`}>
-                                  {idx + 1}
-                                </div>
-                                {bags.length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => removeBag(b.id)}
-                                    className="absolute inset-0 m-auto w-6 h-6 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all cursor-pointer opacity-0 group-hover:opacity-100 flex items-center justify-center"
-                                  >
-                                    <Trash2 size={14} strokeWidth={2.5} />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-2.5 px-3 align-middle">
-                              <input
-                                type="number"
-                                step="0.001"
-                                className="w-full h-[38px] px-3 bg-gray-50 border border-transparent rounded-lg text-[14px] font-bold tabular-nums text-gray-900 placeholder-gray-300 hover:bg-gray-100 focus:bg-white focus:outline-none focus:border-[#a57b3f] focus:ring-2 focus:ring-[#a57b3f]/20 transition-all"
-                                placeholder="30.000"
-                                value={b.gross}
-                                onChange={(e) => updateBag(b.id, 'gross', e.target.value)}
-                              />
-                            </td>
-                            <td className="py-2.5 px-3 align-middle">
-                              <input
-                                type="number"
-                                className="w-full h-[38px] px-3 bg-gray-50 border border-transparent rounded-lg text-[14px] font-bold tabular-nums text-gray-900 text-center placeholder-gray-300 hover:bg-gray-100 focus:bg-white focus:outline-none focus:border-[#a57b3f] focus:ring-2 focus:ring-[#a57b3f]/20 transition-all"
-                                placeholder="60"
-                                value={b.rolaCount}
-                                onChange={(e) => updateBag(b.id, 'rolaCount', e.target.value)}
-                              />
-                            </td>
-                            <td className="py-2.5 px-3 align-middle">
-                              <div className="flex bg-gray-50 p-1 rounded-lg h-[38px] items-center">
-                                {['S', 'Z'].map(tw => (
-                                  <button
-                                    key={tw}
-                                    type="button"
-                                    onClick={() => updateBag(b.id, 'twistType', tw as any)}
-                                    className={`flex-1 h-full rounded-md text-[13px] font-bold transition-all cursor-pointer ${b.twistType === tw ? 'bg-white text-gray-900 shadow-sm border border-gray-200/50' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100/50'
-                                      }`}
-                                  >
-                                    {tw}
-                                  </button>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="py-2.5 px-3 relative align-middle">
-                              <select
-                                className="w-full h-[38px] pl-3 pr-8 bg-gray-50 border border-transparent rounded-lg text-[13px] font-bold text-gray-700 appearance-none hover:bg-gray-100 focus:bg-white focus:outline-none focus:border-[#a57b3f] focus:ring-2 focus:ring-[#a57b3f]/20 transition-all cursor-pointer"
-                                value={b.color}
-                                onChange={(e) => updateBag(b.id, 'color', e.target.value)}
-                              >
-                                <option value="">Color...</option>
-                                {COLOR_TYPES.map(c => (
-                                  <option key={c} value={c}>{c}</option>
-                                ))}
-                              </select>
-                              <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                <ChevronDown size={14} strokeWidth={3} />
-                              </div>
-                            </td>
-                            <td className="py-2.5 px-3 align-middle">
-                              <div className="flex bg-gray-50 p-1 rounded-lg h-[38px] items-center">
-                                {['Norm', 'Big'].map(sz => (
-                                  <button
-                                    key={sz}
-                                    type="button"
-                                    onClick={() => handleSizeTypeChange(b.id, sz as any)}
-                                    className={`flex-1 h-full rounded-md text-[11px] font-extrabold uppercase tracking-wide transition-all cursor-pointer ${b.sizeType === sz
-                                      ? sz === 'Norm'
-                                        ? 'bg-white text-[#a57b3f] shadow-sm border border-gray-200/50'
-                                        : 'bg-[#a57b3f] text-white shadow-sm'
-                                      : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100/50'
-                                      }`}
-                                  >
-                                    {sz}
-                                  </button>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="py-2.5 px-4 text-right align-middle whitespace-nowrap">
-                              <div className="flex flex-col items-end">
-                                <div className="text-[16px] font-black text-[#8c6530] tabular-nums leading-none">
-                                  {fmtKg(netKg)}
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                        <tr>
-                          <td colSpan={7} className="p-0">
-                            <button
-                              type="button"
-                              onClick={addBag}
-                              className="w-full py-3.5 text-[12px] font-extrabold uppercase tracking-widest text-[#a57b3f] hover:text-[#8c6530] hover:bg-amber-50/30 transition-colors flex items-center justify-center gap-2"
-                            >
-                              <Plus size={16} strokeWidth={2.5} /> Add Row
-                            </button>
-                          </td>
-                        </tr>
-                      </tbody>
-                      <tfoot className="border-t-2 border-gray-100">
-                        <tr>
-                          <td colSpan={5}></td>
-                          <td className="py-4 px-3 text-right align-middle">
-                            <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Total Net Kasab</span>
-                          </td>
-                          <td className="py-4 px-4 text-right whitespace-nowrap align-middle">
-                            <span className="text-[22px] font-black text-[#a57b3f] tabular-nums leading-none tracking-tight">{fmtKg(totalFormNet)}</span>
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
+
               </div>
             </div>
 
@@ -874,169 +752,80 @@ export default function Receiving() {
         </div>
       )}
       {/* --- Grouped Cards List --- */}
+
       {groupedReceipts.length === 0 && !loading ? (
         <EmptyState text={`No receiving entries found for ${formattedMonth}.`} />
       ) : (
         <div className="mt-6 space-y-4 pb-28 animate-in fade-in duration-500">
-          {groupedReceipts.map((group) => {
-            const isExpanded = group.receipts.length === 1 || expandedChallans.has(group.id)
-            const multiRow = group.receipts.length > 1
-
-            return (
-              <div
-                key={group.id}
-                className={`rounded-[24px] overflow-hidden bg-white shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100 transition-all ${isExpanded ? 'shadow-[0_8px_30px_-8px_rgba(0,0,0,0.08)]' : ''}`}
-              >
-                {/* Card Header */}
-                <div
-                  className={`px-5 py-4 ${multiRow ? 'cursor-pointer hover:bg-gray-50/50 transition-colors select-none' : ''}`}
-                  onClick={() => multiRow && toggleChallan(group.id)}
-                >
-                  <div className="flex items-center justify-between gap-3 mb-4">
-                    <div className="flex items-center gap-3 min-w-0 flex-1 flex-wrap">
-                      {group.challan_no !== '—' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-amber-50 text-amber-800 border border-amber-200/50 shrink-0">
-                          Ch. #{group.challan_no}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-gray-50 text-gray-500 border border-gray-200/50 shrink-0">
-                          No Ch.
-                        </span>
-                      )}
-                      <h3 className="font-extrabold text-[16px] text-gray-900 truncate tracking-tight">{group.party_name}</h3>
-                      <span className="text-[12px] text-gray-400 font-medium shrink-0 ml-auto">{fmtDate(group.date)}</span>
-                    </div>
-
-                    {multiRow && (
-                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-50 text-gray-400 shrink-0">
-                        <ChevronDown
-                          size={18}
-                          strokeWidth={2.5}
-                          className={`transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[#a57b3f]' : ''}`}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Card Body Grid */}
-                  <div className="grid grid-cols-[1.2fr_1.2fr_1.5fr_auto] gap-2 sm:gap-4 items-end w-full">
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">Gross</span>
-                      <span className="text-[15px] font-black text-gray-900 tabular-nums tracking-tight">{fmtKg(group.gross)}</span>
-                    </div>
-
-                    <div className="flex flex-col min-w-0">
-                      {group.rola > 0 && (
-                        <>
-                          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">Rola</span>
-                          <span className="text-[15px] font-black text-gray-700 tabular-nums tracking-tight flex items-center gap-1.5">
-                            {group.rola} <span className="text-[11px] font-bold text-gray-400">pcs</span>
-                            {group.hasBig && <span className="bg-amber-50 text-amber-600 border border-amber-200/50 text-[9px] px-1 py-0.5 rounded font-black uppercase tracking-wider">Big</span>}
-                          </span>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-[#a57b3f]/70 mb-0.5">Net Kasab</span>
-                      <span className="text-[17px] font-black text-[#a57b3f] tabular-nums tracking-tight">{fmtKg(group.net)}</span>
-                    </div>
-
-                    <div className="flex flex-col items-end shrink-0">
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
-                        Bags
-                      </span>
-                      <span className="text-[15px] font-black text-gray-600">
-                        {group.bagsCount}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Expanded Individual Rows */}
-                {isExpanded && (
-                  <div className="flex flex-col gap-0 bg-gray-50/60 border-t border-gray-100 px-3 py-2.5 divide-y divide-gray-100/70">
-                    {group.receipts.map((r, idx) => (
-                      <div
-                        key={r.id}
-                        className="group/row flex items-center gap-3 py-2 first:pt-0 last:pb-0"
+          {/* DESKTOP VIEW (TABLE) */}
+          <div className="bg-white rounded-[20px] shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden\">
+            <div className="overflow-x-auto scrollbar-hide">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50/50 border-b border-gray-100">
+                    <th className="px-5 py-3.5 text-[10px] font-extrabold text-gray-400 uppercase tracking-widest whitespace-nowrap">Ch. No</th>
+                    <th className="px-5 py-3.5 text-[10px] font-extrabold text-gray-400 uppercase tracking-widest whitespace-nowrap">Party</th>
+                    <th className="px-5 py-3.5 text-[10px] font-extrabold text-gray-400 uppercase tracking-widest whitespace-nowrap">Date</th>
+                    <th className="px-5 py-3.5 text-[10px] font-extrabold text-gray-400 uppercase tracking-widest whitespace-nowrap text-right">Gross</th>
+                    <th className="px-5 py-3.5 text-[10px] font-extrabold text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">Rola</th>
+                    <th className="px-5 py-3.5 text-[10px] font-extrabold text-[#a57b3f]/70 uppercase tracking-widest whitespace-nowrap text-right">Net Kasab</th>
+                    <th className="px-5 py-3.5 text-[10px] font-extrabold text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">Bags</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {groupedReceipts.map((group) => {
+                    return (
+                      <tr
+                        key={group.id}
+                        className="hover:bg-gray-50/50 transition-colors cursor-pointer select-none group/tr"
+                        onClick={() => setSelectedGroupId(group.id)}
                       >
-                        {/* Left accent bar */}
-                        <div className="w-0.5 self-stretch rounded-full flex-shrink-0 bg-[#c9a96e]/50" />
-
-                        {/* Main content */}
-                        <div className="flex-1 min-w-0">
-                          {/* Top Bar: Badges & Actions */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider flex-shrink-0 bg-white text-gray-600 border border-gray-200 shadow-sm">
-                              Bag #{idx + 1}
+                        <td className="px-5 py-4 whitespace-nowrap align-middle">
+                          {group.challan_no !== '—' ? (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-black tracking-wide bg-amber-50 text-amber-800 shadow-sm shrink-0">
+                              Ch. #{group.challan_no}
                             </span>
-                            {r.color && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white text-gray-700 border border-gray-200 shadow-sm shrink-0">
-                                {r.color}
-                              </span>
-                            )}
-
-                            <div className="ml-auto flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity flex-shrink-0">
-                              <button type="button" onClick={(e) => { e.stopPropagation(); startEdit(r); }} className="p-1.5 rounded-lg flex items-center justify-center hover:bg-white text-gray-300 hover:text-gray-600 transition-colors cursor-pointer" title="Edit Bag">
-                                <Pencil size={13} strokeWidth={2.5} />
-                              </button>
-                              {deleting === r.id ? (
-                                <div className="flex items-center gap-1 text-xs bg-red-50 px-1.5 py-1 rounded-lg border border-red-100">
-                                  <span className="text-red-600 font-bold text-[10px]">Sure?</span>
-                                  <button onClick={(e) => { e.stopPropagation(); handleDelete(r.id); }} className="px-2 py-0.5 bg-red-500 text-white rounded text-[10px] font-bold hover:bg-red-600 transition-colors">Yes</button>
-                                  <button onClick={(e) => { e.stopPropagation(); setDeleting(null); }} className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[10px] text-gray-600 font-bold hover:bg-gray-50 transition-colors">No</button>
-                                </div>
-                              ) : (
-                                <button type="button" onClick={(e) => { e.stopPropagation(); setDeleting(r.id); }} className="p-1.5 rounded-lg flex items-center justify-center hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors cursor-pointer" title="Delete Bag">
-                                  <Trash2 size={13} strokeWidth={2.5} />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Data Grid: Inline like Dispatch */}
-                          <div className="flex items-baseline justify-between mt-1">
-                            <div className="flex items-baseline gap-1.5 flex-nowrap w-full overflow-hidden">
-                              <div className="flex items-baseline gap-1 whitespace-nowrap">
-                                <span className="text-[13px] font-black text-gray-900 tabular-nums tracking-tight">{fmtKg(r.gross_weight)}</span>
-                                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Gross</span>
-                              </div>
-                              
-                              {r.rola_count > 0 && (
-                                <>
-                                  <span className="text-gray-200 text-[10px] shrink-0">|</span>
-                                  <div className="flex items-baseline gap-1 whitespace-nowrap">
-                                    <span className="text-[12px] font-bold text-gray-600 tabular-nums">{r.rola_count} pcs</span>
-                                    <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Rola</span>
-                                    {isBigRola(r.tare_weight, r.rola_count, resolvePartyRolaWeight(r.party)) && (
-                                      <span className="bg-amber-50 text-amber-600 border border-amber-200/50 text-[9px] px-1 py-0.5 rounded font-black uppercase tracking-wider ml-1">Big</span>
-                                    )}
-                                  </div>
-                                </>
-                              )}
-
-                              <span className="text-gray-200 text-[10px] shrink-0">|</span>
-                              
-                              <div className="flex items-baseline gap-1 whitespace-nowrap">
-                                <span className="text-[13px] font-black text-[#a57b3f] tabular-nums tracking-tight">{fmtKg(r.net_weight)}</span>
-                                <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#a57b3f]/80">Net</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-black tracking-wide bg-gray-100 text-gray-500 shrink-0">
+                              No Ch.
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap align-middle">
+                          <span className="font-extrabold text-[14px] text-gray-900 tracking-tight">{group.party_name}</span>
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap align-middle">
+                          <span className="text-[12px] text-gray-500 font-medium">{fmtDate(group.date)}</span>
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-right align-middle">
+                          <span className="text-[14px] font-black text-gray-900 tabular-nums tracking-tight">{fmtKg(group.gross)}</span>
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-center align-middle">
+                          {group.rola > 0 ? (
+                            <span className="text-[14px] font-black text-gray-700 tabular-nums tracking-tight flex items-center justify-center gap-1.5">
+                              {group.rola} <span className="text-[10px] font-bold text-gray-400">pcs</span>
+                              {group.hasBig && <span className="bg-amber-50 text-amber-600 border border-amber-200/50 text-[9px] px-1 py-0.5 rounded font-black uppercase tracking-wider ml-1">Big</span>}
+                            </span>
+                          ) : <span className="text-gray-300">-</span>}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-right align-middle">
+                          <span className="text-[15px] font-black text-[#a57b3f] tabular-nums tracking-tight">{fmtKg(group.net)}</span>
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-center align-middle">
+                          <span className="text-[13px] font-black text-gray-600">{group.bagsCount}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Floating Action Button - Mobile Only */}
-      {!isOpen && (
+      {!isOpen && parties.length > 0 && (
         <button
           onClick={startAdd}
           className="sm:hidden fixed bottom-[80px] right-5 bg-gradient-to-b from-[#b88f4b] to-[#a57b3f] hover:from-[#c29a56] hover:to-[#b38848] text-white px-6 py-4 rounded-full shadow-[0_8px_30px_-8px_rgba(165,123,63,0.5)] flex items-center gap-2.5 font-black transition-all active:scale-95 z-40 border border-[#a57b3f]/50"
@@ -1044,6 +833,104 @@ export default function Receiving() {
           <Plus size={22} strokeWidth={3} /> <span className="tracking-wide">New Receipt</span>
         </button>
       )}
+
+      {/* --- Details Modal --- */}
+      {selectedGroupId && (() => {
+        const selectedGroup = groupedReceipts.find(g => g.id === selectedGroupId)
+        if (!selectedGroup) return null
+
+        return (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+             <div className="bg-[#fcfcfb] w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+                <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-white rounded-t-2xl shrink-0">
+                   <div>
+                      <h3 className="text-lg font-black text-gray-900 tracking-tight">{selectedGroup.party_name}</h3>
+                      <p className="text-xs font-bold text-gray-500">
+                        {selectedGroup.challan_no !== '—' ? `Ch. #${selectedGroup.challan_no}` : 'No Challan'} • {fmtDate(selectedGroup.date)}
+                      </p>
+                   </div>
+                   <button onClick={() => setSelectedGroupId(null)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-500 cursor-pointer">
+                      <X size={20} strokeWidth={2.5} />
+                   </button>
+                </div>
+
+                <div className="p-6 overflow-y-auto flex flex-col gap-3">
+                   {/* Summary Header */}
+                   <div className="flex items-center justify-between bg-[#a57b3f]/5 border border-[#a57b3f]/20 p-4 rounded-xl mb-2 shrink-0">
+                      <div className="text-center flex-1">
+                         <div className="text-[10px] font-extrabold text-[#a57b3f]/70 uppercase tracking-widest mb-1">Total Net Kasab</div>
+                         <div className="text-lg font-black text-[#8c6530]">{fmtKg(selectedGroup.net)}</div>
+                      </div>
+                      <div className="text-center flex-1 border-l border-[#a57b3f]/20">
+                         <div className="text-[10px] font-extrabold text-[#a57b3f]/70 uppercase tracking-widest mb-1">Total Rola</div>
+                         <div className="text-lg font-black text-[#8c6530]">{selectedGroup.rola} pcs</div>
+                      </div>
+                   </div>
+
+                   {/* Bag Items */}
+                   <div className="space-y-2">
+                     <h4 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-3 ml-1">Bags ({selectedGroup.bagsCount})</h4>
+                     {selectedGroup.receipts.map((r, idx) => (
+                       <div key={r.id} className="group/row flex items-center justify-between bg-white border border-gray-100 rounded-xl p-3 shadow-sm hover:shadow-md hover:border-gray-200 transition-all">
+                         <div className="flex items-center gap-3">
+                           <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center border border-gray-100 shrink-0">
+                             <span className="text-[11px] font-black text-gray-500">#{idx + 1}</span>
+                           </div>
+                           
+                           <div>
+                             <div className="flex items-center gap-2 mb-1">
+                               <span className="text-[14px] font-black text-gray-900 tabular-nums">{fmtKg(r.net_weight)}</span>
+                               <span className="text-[10px] font-extrabold text-[#a57b3f] uppercase tracking-wider">Net</span>
+                               {r.color && (
+                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 ml-1">
+                                   {r.color}
+                                 </span>
+                               )}
+                             </div>
+                             
+                             <div className="flex items-center gap-3 text-[11px] font-bold text-gray-400">
+                               <span>Gross: {fmtKg(r.gross_weight)}</span>
+                               {r.rola_count > 0 && (
+                                 <>
+                                   <span>•</span>
+                                   <span className="flex items-center gap-1">
+                                     Rola: {r.rola_count} pcs
+                                     {isBigRola(r.tare_weight, r.rola_count, resolvePartyRolaWeight(r.party)) && (
+                                       <span className="text-amber-600 bg-amber-50 px-1 rounded text-[9px] uppercase tracking-wider ml-1">Big</span>
+                                     )}
+                                   </span>
+                                 </>
+                               )}
+                             </div>
+                           </div>
+                         </div>
+                         
+                         <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity">
+                           <button onClick={(e) => { e.stopPropagation(); startEdit(r); setSelectedGroupId(null); }} className="p-2 bg-gray-50 hover:bg-white border border-transparent hover:border-gray-200 rounded-lg transition-all text-gray-400 hover:text-gray-700">
+                             <Pencil size={14} strokeWidth={2.5} />
+                           </button>
+                           
+                           {deleting === r.id ? (
+                             <div className="flex items-center" onClick={e => e.stopPropagation()}>
+                               <ConfirmDelete
+                                 onConfirm={() => handleDelete(r.id)}
+                                 onCancel={() => setDeleting(null)}
+                               />
+                             </div>
+                           ) : (
+                             <button onClick={(e) => { e.stopPropagation(); setDeleting(r.id); }} className="p-2 bg-gray-50 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-lg transition-all text-gray-400 hover:text-red-500">
+                               <Trash2 size={14} strokeWidth={2.5} />
+                             </button>
+                           )}
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                </div>
+             </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

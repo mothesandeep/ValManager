@@ -62,13 +62,27 @@ export default function Expenses() {
     note: '',
   })
 
+
+  // Handle mobile hardware back button to close modal
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (window.location.hash !== '#modal' && form) {
+        setForm(null)
+      }
+    }
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [form])
+
   const startAdd = () => {
+    window.location.hash = 'modal'
     setForm(blankForm())
     setErrorMsg(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const edit = (x: Expense) => {
+    window.location.hash = 'modal'
     setForm({
       id: x.id,
       date: x.date,
@@ -262,7 +276,7 @@ export default function Expenses() {
                 </h2>
               </div>
               <button 
-                onClick={() => setForm(null)}
+                onClick={() => { if(window.location.hash === '#modal') window.history.back(); else setForm(null); }}
                 className="p-2 -mr-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 transition-colors cursor-pointer"
               >
                 <X size={20} strokeWidth={2.5} />
@@ -325,7 +339,7 @@ export default function Expenses() {
               <div className="pt-2 flex sm:justify-end gap-3 pb-2 border-t border-gray-100 mt-2">
                 <button
                   type="button"
-                  onClick={() => setForm(null)}
+                  onClick={() => { if(window.location.hash === '#modal') window.history.back(); else setForm(null); }}
                   disabled={saving}
                   className="flex-1 sm:flex-none sm:px-6 py-3 sm:py-2.5 rounded-[14px] sm:rounded-xl font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 transition-colors cursor-pointer text-[15px] sm:text-sm"
                 >
