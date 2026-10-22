@@ -3,7 +3,7 @@ import type { Payment, PaymentWithParty } from '../../features/payments/types'
 
 
 import { enqueueMutation, isNetworkError } from '../offline/sync'
-import { getPendingMutations, mergePendingMutations } from '../offline/db'
+import { getPendingMutations, mergePendingMutations, setCachedData, getCachedData } from '../offline/db'
 
 // ── Payments ──────────────────────────────────────────────────────────────────
 
@@ -18,12 +18,10 @@ export async function fetchPayments(): Promise<PaymentWithParty[]> {
       .order('date', { ascending: false })
     if (error) throw error
     serverData = (data ?? []) as PaymentWithParty[]
+    void setCachedData('cachedPayments', serverData)
   } catch (err) {
-    if (!navigator.onLine) {
-      console.warn('Offline: Could not fetch payments')
-    } else {
-      throw err
-    }
+    console.warn('[Kasab API] Could not fetch payments from server, falling back to local cache:', err)
+    serverData = await getCachedData<PaymentWithParty>('cachedPayments')
   }
 
   const pending = await getPendingMutations<PaymentWithParty>('payments')

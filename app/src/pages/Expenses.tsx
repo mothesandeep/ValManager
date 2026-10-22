@@ -1,10 +1,27 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, X } from 'lucide-react'
-import { fetchExpenses, insertExpense, updateExpense, deleteExpense, type ExpensePayload } from '../lib/api/expenses'
-
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  Search,
+  Download,
+  Receipt,
+  Building2,
+  Layers,
+  Fuel,
+  Wrench,
+  Package,
+} from 'lucide-react'
+import {
+  fetchExpenses,
+  insertExpense,
+  updateExpense,
+  deleteExpense,
+  type ExpensePayload,
+} from '../lib/api/expenses'
 
 import type { Expense } from '../features/expenses/types'
-import { EXPENSE_CATEGORIES } from '../features/expenses/constants'
 import { fmtDate, todayStr } from '../utils/date'
 import { fmtMoney } from '../utils/format'
 import { PageHeader } from '../components/ui/PageHeader'
@@ -12,6 +29,146 @@ import { Button } from '../components/ui/Button'
 import { ConfirmDelete } from '../components/ui/ConfirmDelete'
 import { EmptyState } from '../components/ui/EmptyState'
 import { useMonth } from '../context/MonthContext'
+import { useToast } from '../context/ToastContext'
+
+// ── Category Standardization Helper ──────────────────────────────────────────
+export function standardizeCategory(category: string, note?: string | null): string {
+  const text = `${category || ''} ${note || ''}`.toLowerCase()
+
+  // 1. Rent & Premises
+  if (text.includes('rent')) {
+    return 'Rent'
+  }
+
+  // 2. Repairs & Maintenance
+  if (
+    text.includes('repair') ||
+    text.includes('puncher') ||
+    text.includes('puncture') ||
+    text.includes('tyre') ||
+    text.includes('tire') ||
+    text.includes('patch') ||
+    text.includes('patta') ||
+    text.includes('motor') ||
+    text.includes('belt') ||
+    text.includes('service')
+  ) {
+    return 'Repairs & Maintenance'
+  }
+
+  // 3. Fuel & Travel
+  if (
+    text.includes('fuel') ||
+    text.includes('petrol') ||
+    text.includes('diesel') ||
+    text.includes('hawa') ||
+    text.includes('ola charging') ||
+    text.includes('transport')
+  ) {
+    return 'Fuel & Travel'
+  }
+
+  // 4. Shop Supplies & Consumables
+  if (
+    text.includes('oil') ||
+    text.includes('marker') ||
+    text.includes('refill') ||
+    text.includes('challan') ||
+    text.includes('book') ||
+    text.includes('bugari') ||
+    text.includes('stationery') ||
+    text.includes('plastic') ||
+    text.includes('blade') ||
+    text.includes('supplies') ||
+    text.includes('consumables')
+  ) {
+    return 'Shop Supplies'
+  }
+
+  if (category && category !== 'Other') {
+    return category
+  }
+
+  return 'General Expense'
+}
+
+// ── Category Badge Color Helper ──────────────────────────────────────────────
+function getCategoryBadge(head: string) {
+  switch (head) {
+    case 'Rent':
+      return {
+        badgeClass: 'bg-slate-100 text-slate-700 border-slate-200/80',
+        dotClass: 'bg-slate-500',
+        Icon: Building2,
+      }
+    case 'Repairs & Maintenance':
+      return {
+        badgeClass: 'bg-amber-50 text-amber-800 border-amber-200/80',
+        dotClass: 'bg-amber-500',
+        Icon: Wrench,
+      }
+    case 'Fuel & Travel':
+      return {
+        badgeClass: 'bg-sky-50 text-sky-800 border-sky-200/80',
+        dotClass: 'bg-sky-500',
+        Icon: Fuel,
+      }
+    case 'Shop Supplies':
+      return {
+        badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200/80',
+        dotClass: 'bg-emerald-500',
+        Icon: Package,
+      }
+    default:
+      return {
+        badgeClass: 'bg-slate-100 text-slate-700 border-slate-200/80',
+        dotClass: 'bg-slate-500',
+        Icon: Layers,
+      }
+  }
+}
+
+const EXPENSE_MODAL_CATEGORIES = [
+  'Rent',
+  'Repairs & Maintenance',
+  'Fuel & Travel',
+  'Shop Supplies',
+  'Other',
+] as const
+
+function cleanEmojiAndMode(text?: string | null): string {
+  if (!text) return ''
+  return text
+    .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+    .replace(/\s*\((UPI|Cash|Bank Transfer)\)\s*/gi, '')
+    .trim()
+}
+
+// ── Payment Mode Detection Helper ────────────────────────────────────────────
+function detectExpensePaymentMode(expense: Expense): { mode: string; isUPI: boolean; isBank: boolean } {
+  const note = (expense.note || '').toLowerCase()
+  if (note.includes('(cash)') || note.includes('cash')) {
+    return { mode: 'Cash', isUPI: false, isBank: false }
+  }
+  if (note.includes('(upi)') || note.includes('upi') || note.includes('gpay') || note.includes('phonepe') || note.includes('online')) {
+    return { mode: 'UPI', isUPI: true, isBank: false }
+  }
+  if (note.includes('(bank transfer)') || note.includes('neft') || note.includes('rtgs') || note.includes('bank') || note.includes('transfer')) {
+    return { mode: 'Bank Transfer', isUPI: false, isBank: true }
+  }
+  if (note.includes('cheque') || note.includes('chq')) {
+    return { mode: 'Cheque', isUPI: false, isBank: true }
+  }
+  const cat = (expense.category || '').toLowerCase()
+  const amt = Number(expense.amount) || 0
+  if (cat.includes('rent') || amt >= 10000) {
+    return { mode: 'Bank Transfer', isUPI: false, isBank: true }
+  }
+  if (amt >= 500 && (note.includes('petrol') || note.includes('tyre') || note.includes('bugari'))) {
+    return { mode: 'UPI', isUPI: true, isBank: false }
+  }
+  return { mode: 'Cash', isUPI: false, isBank: false }
+}
 
 interface ExpenseFormState {
   id: string | null
@@ -19,16 +176,22 @@ interface ExpenseFormState {
   category: string
   amount: string
   note: string
+  paymentMode: 'Cash' | 'UPI' | 'Bank Transfer'
 }
 
 export default function Expenses() {
   const { filterByMonth, formattedMonth } = useMonth()
+  const { showToast } = useToast()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState<ExpenseFormState | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  // Filters & Search
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL')
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -48,20 +211,71 @@ export default function Expenses() {
     void loadData()
   }, [loadData])
 
-  const filteredExpenses = filterByMonth(expenses)
-  const monthExpenseTotal = filteredExpenses.reduce(
-    (s, x) => s + (Number(x.amount) || 0),
-    0
+  const filteredExpenses = useMemo(() => filterByMonth(expenses), [filterByMonth, expenses])
+
+  const monthExpenseTotal = useMemo(
+    () => filteredExpenses.reduce((s, x) => s + (Number(x.amount) || 0), 0),
+    [filteredExpenses]
+  )
+
+  // Dynamic Category Counts
+  const categoryCounts = useMemo(() => {
+    return filteredExpenses.reduce<Record<string, number>>((acc, x) => {
+      const head = standardizeCategory(x.category, x.note)
+      acc[head] = (acc[head] || 0) + 1
+      return acc
+    }, {})
+  }, [filteredExpenses])
+
+  // Dynamic Top Expense Head Calculation
+  const { topCategory, topCategoryAmount } = useMemo(() => {
+    const totals: Record<string, number> = {}
+    for (const x of filteredExpenses) {
+      const head = standardizeCategory(x.category, x.note)
+      totals[head] = (totals[head] || 0) + (Number(x.amount) || 0)
+    }
+    let topCat = '—'
+    let maxAmt = 0
+    for (const [cat, amt] of Object.entries(totals)) {
+      if (amt > maxAmt) {
+        maxAmt = amt
+        topCat = cat
+      }
+    }
+    return { topCategory: topCat, topCategoryAmount: maxAmt }
+  }, [filteredExpenses])
+
+  // Filtered Display List
+  const displayExpenses = useMemo(() => {
+    return filteredExpenses.filter((x) => {
+      const head = standardizeCategory(x.category, x.note)
+      if (selectedCategory !== 'ALL' && head !== selectedCategory) {
+        return false
+      }
+      if (!searchQuery.trim()) return true
+      const q = searchQuery.toLowerCase().trim()
+      const noteMatch = (x.note || '').toLowerCase().includes(q)
+      const catMatch = (x.category || '').toLowerCase().includes(q)
+      const headMatch = head.toLowerCase().includes(q)
+      const amtMatch = String(x.amount).includes(q)
+      const dateMatch = fmtDate(x.date).toLowerCase().includes(q)
+      return noteMatch || catMatch || headMatch || amtMatch || dateMatch
+    })
+  }, [filteredExpenses, selectedCategory, searchQuery])
+
+  const displayTotal = useMemo(
+    () => displayExpenses.reduce((s, x) => s + (Number(x.amount) || 0), 0),
+    [displayExpenses]
   )
 
   const blankForm = (): ExpenseFormState => ({
     id: null,
     date: todayStr(),
-    category: EXPENSE_CATEGORIES[0],
+    category: EXPENSE_MODAL_CATEGORIES[3], // Shop Supplies
     amount: '',
     note: '',
+    paymentMode: 'Cash',
   })
-
 
   // Handle mobile hardware back button to close modal
   useEffect(() => {
@@ -83,12 +297,18 @@ export default function Expenses() {
 
   const edit = (x: Expense) => {
     window.location.hash = 'modal'
+    const detected = detectExpensePaymentMode(x)
+    const mode = (['Cash', 'UPI', 'Bank Transfer'].includes(detected.mode)
+      ? detected.mode
+      : 'Cash') as 'Cash' | 'UPI' | 'Bank Transfer'
+
     setForm({
       id: x.id,
       date: x.date,
-      category: x.category || EXPENSE_CATEGORIES[0],
+      category: standardizeCategory(x.category, x.note),
       amount: String(x.amount),
-      note: x.note || '',
+      note: cleanEmojiAndMode(x.note),
+      paymentMode: mode,
     })
     setErrorMsg(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -107,18 +327,25 @@ export default function Expenses() {
     setSaving(true)
     setErrorMsg(null)
 
+    const baseNote = cleanEmojiAndMode(form.note)
+    const finalNote = baseNote
+      ? `${baseNote} (${form.paymentMode})`
+      : `Paid via ${form.paymentMode}`
+
     const payload: ExpensePayload = {
       date: form.date,
       category: form.category,
       amount: amt,
-      note: form.note.trim() || null,
+      note: finalNote,
     }
 
     try {
       if (form.id) {
         await updateExpense(form.id, payload)
+        showToast('Expense voucher updated successfully', 'success')
       } else {
         await insertExpense(payload)
+        showToast('Expense voucher recorded successfully', 'success')
       }
       setForm(null)
       await loadData()
@@ -135,6 +362,7 @@ export default function Expenses() {
     try {
       await deleteExpense(id)
       setDeleting(null)
+      showToast('Expense entry deleted', 'info')
       await loadData()
     } catch (err: unknown) {
       console.error('Delete expense error:', err)
@@ -143,15 +371,42 @@ export default function Expenses() {
     }
   }
 
+  const handleExportCSV = () => {
+    if (displayExpenses.length === 0) return
+    const headers = ['Date', 'Category (Original)', 'Standard Head', 'Description / Note', 'Payment Mode', 'Amount (INR)']
+    const rows = displayExpenses.map((x) => {
+      const head = standardizeCategory(x.category, x.note)
+      const mode = detectExpensePaymentMode(x).mode
+      return [
+        `"${x.date}"`,
+        `"${x.category || ''}"`,
+        `"${head}"`,
+        `"${(x.note || '').replace(/"/g, '""')}"`,
+        `"${mode}"`,
+        x.amount,
+      ]
+    })
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `operating_expenses_${formattedMonth.replace(/\s+/g, '_')}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
-        title="Expenses"
+        title="Operating Expenses"
         description="Operational costs — rent, repairs, transport & utilities"
         actions={
           !form && (
             <div className="hidden sm:block">
-              <Button onClick={startAdd} className="bg-red-600 hover:bg-red-700 text-white">
+              <Button onClick={startAdd} variant="primary">
                 <Plus size={18} strokeWidth={2.5} /> Log Expense
               </Button>
             </div>
@@ -159,29 +414,77 @@ export default function Expenses() {
         }
       />
 
-      {/* ── Month Summary KPIs ────────────────────────────────────── */}
-      {!form && (
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          <div className="rounded-[var(--radius-xl)] p-5 bg-[var(--color-negative-bg)] shadow-[var(--shadow-sm)] border border-red-100/50 transition-all">
-            <div className="text-[10px] font-extrabold uppercase tracking-widest text-red-600/70 mb-2">Total Expenses</div>
-            <div className="text-[24px] font-black tabular-nums leading-none tracking-tight text-[var(--color-negative)] mb-1.5">
-              {fmtMoney(monthExpenseTotal)}
+      {/* ── 3-Column Summary Metric Cards ────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Card 1: Total Expenses */}
+          <div className="rounded-2xl p-5 bg-rose-50/40 border border-rose-200/70 shadow-xs transition-all flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-rose-700/80">
+                  Total Expenses
+                </span>
+                <span className="p-1.5 rounded-lg bg-rose-100 text-rose-600">
+                  <Receipt size={16} />
+                </span>
+              </div>
+              <div className="text-[26px] font-black tabular-nums leading-none tracking-tight text-rose-600 mb-1.5">
+                {fmtMoney(monthExpenseTotal)}
+              </div>
             </div>
-            <div className="text-[10px] font-bold text-red-600/50">{formattedMonth}</div>
+            <div className="text-[11px] font-bold text-rose-600/70 mt-2">
+              {formattedMonth} operational burn
+            </div>
           </div>
-          <div className="rounded-[var(--radius-xl)] p-5 bg-[var(--color-card)] shadow-[var(--shadow-sm)] border border-[var(--color-border)] transition-all">
-            <div className="text-[10px] font-extrabold uppercase tracking-widest text-[var(--color-ink-soft)] mb-2">Expense Count</div>
-            <div className="text-[24px] font-black tabular-nums leading-none tracking-tight text-[var(--color-ink)] mb-1.5">
-              {filteredExpenses.length} <span className="text-[14px] text-[var(--color-ink-soft)] font-bold tracking-normal">entries</span>
+
+          {/* Card 2: Top Expense Head */}
+          <div className="rounded-2xl p-5 bg-white border border-slate-200/80 shadow-xs transition-all flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">
+                  Top Expense Head
+                </span>
+                <span className="p-1.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200/80">
+                  <Building2 size={16} />
+                </span>
+              </div>
+              <div className="text-[22px] font-black leading-none tracking-tight text-slate-900 mb-1.5 truncate">
+                {topCategory !== '—' ? topCategory : 'No entries'}
+              </div>
             </div>
-            <div className="text-[10px] font-medium text-[var(--color-ink-soft)]">{formattedMonth}</div>
+            <div className="text-[11px] font-semibold text-slate-500 mt-2">
+              {topCategoryAmount > 0
+                ? `${fmtMoney(topCategoryAmount)} • ${Math.round((topCategoryAmount / (monthExpenseTotal || 1)) * 100)}% of total`
+                : `${formattedMonth} period`}
+            </div>
+          </div>
+
+          {/* Card 3: Expense Entries */}
+          <div className="rounded-2xl p-5 bg-white border border-slate-200/80 shadow-xs transition-all flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">
+                  Expense Entries
+                </span>
+                <span className="p-1.5 rounded-lg bg-slate-100 text-slate-600">
+                  <Layers size={16} />
+                </span>
+              </div>
+              <div className="text-[26px] font-black tabular-nums leading-none tracking-tight text-slate-900 mb-1.5">
+                {filteredExpenses.length}{' '}
+                <span className="text-[14px] text-slate-500 font-bold tracking-normal">
+                  entries
+                </span>
+              </div>
+            </div>
+            <div className="text-[11px] font-medium text-slate-400 mt-2">
+              {formattedMonth} logged transactions
+            </div>
           </div>
         </div>
-      )}
 
       {errorMsg && (
         <div
-          className="rounded-lg p-3 mb-4 text-xs font-medium flex items-center justify-between shadow-xs"
+          className="rounded-lg p-3 text-xs font-medium flex items-center justify-between shadow-xs"
           style={{ background: 'var(--color-due-bg)', color: 'var(--color-due)' }}
         >
           <span>{errorMsg}</span>
@@ -194,161 +497,363 @@ export default function Expenses() {
         </div>
       )}
 
-      {/* ── Expenses List ───────────────────────────────────────────── */}
-      {!form && (
-        <div className="pb-28">
-          <h2 className="text-xs font-extrabold uppercase tracking-widest text-gray-400 mb-4 pl-1">Recent Expenses</h2>
+      {/* ── Section Header & Filter Toolbar ─────────────────────────── */}
+      <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+            <div>
+              <h2 className="text-xs font-extrabold uppercase tracking-widest text-slate-400">
+                Recent Expenses ({displayExpenses.length})
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Verified operating expenditures & workshop costs
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 flex-1 max-w-md">
+              {/* Search Box */}
+              <div className="relative flex-1">
+                <Search
+                  size={15}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                />
+                <input
+                  type="text"
+                  placeholder="Search expenses by note or category..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full h-9 pl-9 pr-8 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all shadow-xs placeholder:text-slate-400 text-slate-900"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              {/* Export CSV Button */}
+              <button
+                type="button"
+                onClick={handleExportCSV}
+                disabled={filteredExpenses.length === 0}
+                className="h-9 px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-xs transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+              >
+                <Download size={14} className="text-slate-500" />
+                <span>Export CSV</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Category Filter Chips */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {[
+              { id: 'ALL', label: `All (${filteredExpenses.length})` },
+              { id: 'Rent', label: `Rent (${categoryCounts['Rent'] || 0})` },
+              {
+                id: 'Repairs & Maintenance',
+                label: `Repairs & Maintenance (${categoryCounts['Repairs & Maintenance'] || 0})`,
+              },
+              {
+                id: 'Fuel & Travel',
+                label: `Fuel & Travel (${categoryCounts['Fuel & Travel'] || 0})`,
+              },
+              {
+                id: 'Shop Supplies',
+                label: `Shop Supplies (${categoryCounts['Shop Supplies'] || 0})`,
+              },
+            ].map((tab) => {
+              const isActive = selectedCategory === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(tab.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                    isActive
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+      {/* ── Compact Structured Data Table ───────────────────────────── */}
+      <div className="pb-28">
           {loading ? (
-            <div className="rounded-[20px] p-8 text-center text-sm border border-gray-100 bg-white shadow-sm text-gray-400">
+            <div className="rounded-2xl p-10 text-center text-sm border border-slate-200 bg-white shadow-xs text-slate-400">
               Loading expenses…
             </div>
           ) : filteredExpenses.length === 0 ? (
             <EmptyState text={`No expenses logged for ${formattedMonth}.`} />
+          ) : displayExpenses.length === 0 ? (
+            <div className="rounded-2xl p-8 text-center border border-slate-200 bg-white shadow-xs space-y-3">
+              <p className="text-sm font-semibold text-slate-600">
+                No expenses match &quot;{searchQuery || selectedCategory}&quot;
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('')
+                  setSelectedCategory('ALL')
+                }}
+                className="px-3.5 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
+              >
+                Reset Filters
+              </button>
+            </div>
           ) : (
-            <div className="space-y-3">
-              {filteredExpenses.map((x) => (
-                <div
-                  key={x.id}
-                  className="rounded-[var(--radius-xl)] p-4 bg-[var(--color-card)] border border-[var(--color-border)] shadow-[var(--shadow-sm)] flex items-center justify-between group transition-all hover:shadow-[var(--shadow-md)]"
-                >
-                  <div className="flex flex-col">
-                    <span className="font-bold text-[15px] text-gray-900 tracking-tight">{x.category}</span>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[11px] font-bold text-gray-400">{fmtDate(x.date)}</span>
-                      {x.note && (
-                        <>
-                          <span className="text-gray-300">·</span>
-                          <span className="text-[11px] font-medium text-gray-500">{x.note}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-[17px] font-black tabular-nums text-red-600 tracking-tight">
-                      -{fmtMoney(x.amount)}
-                    </span>
-                    <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                      <button
-                        type="button"
-                        onClick={() => edit(x)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      {deleting === x.id ? (
-                        <ConfirmDelete
-                          onConfirm={() => handleDelete(x.id)}
-                          onCancel={() => setDeleting(null)}
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setDeleting(x.id)}
-                          className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+            <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/75 border-b border-slate-200/80">
+                      <th className="py-3 px-4 sm:px-6 text-xs font-semibold uppercase tracking-wider text-slate-500">Date</th>
+                      <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500">Category</th>
+                      <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500">Description / Note</th>
+                      <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500">Paid Via</th>
+                      <th className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 text-right">Amount</th>
+                      <th className="py-3 px-4 sm:px-6 text-xs font-semibold uppercase tracking-wider text-slate-500 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {displayExpenses.map((x) => {
+                      const head = standardizeCategory(x.category, x.note)
+                      const badge = getCategoryBadge(head)
+                      const modeInfo = detectExpensePaymentMode(x)
+                      const cleanNote = cleanEmojiAndMode(x.note || x.category)
+                      const cleanCat = cleanEmojiAndMode(x.category)
+
+                      return (
+                        <tr
+                          key={x.id}
+                          className="hover:bg-slate-50/80 transition-colors group"
                         >
-                          <Trash2 size={15} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                          <td className="py-3.5 px-4 sm:px-6 whitespace-nowrap">
+                            <span className="text-[13px] font-semibold text-slate-700">
+                              {fmtDate(x.date)}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${badge.badgeClass}`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${badge.dotClass}`} />
+                              {head}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="flex flex-col">
+                              <span className="text-[13px] font-semibold text-slate-900 tracking-tight">
+                                {cleanNote || cleanCat}
+                              </span>
+                              {cleanNote &&
+                                cleanCat &&
+                                cleanCat !== 'Other' &&
+                                cleanCat !== cleanNote && (
+                                  <span className="text-xs text-slate-500 font-normal mt-0.5">
+                                    {cleanCat}
+                                  </span>
+                                )}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md font-mono text-xs font-medium text-slate-700 bg-slate-100 border border-slate-200/60">
+                              {modeInfo.mode}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            <span className="text-[14px] font-mono font-semibold tabular-nums text-rose-600">
+                              -{fmtMoney(x.amount)}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 sm:px-6 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => edit(x)}
+                                title="Edit Expense"
+                                aria-label="Edit Expense"
+                                className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-md transition cursor-pointer"
+                              >
+                                <Pencil size={15} strokeWidth={2} />
+                              </button>
+                              {deleting === x.id ? (
+                                <ConfirmDelete
+                                  onConfirm={() => handleDelete(x.id)}
+                                  onCancel={() => setDeleting(null)}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleting(x.id)}
+                                  title="Delete Expense"
+                                  aria-label="Delete Expense"
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition cursor-pointer"
+                                >
+                                  <Trash2 size={15} strokeWidth={2} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Table Footer */}
+              <div className="px-4 sm:px-6 py-3 bg-slate-50/60 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-500 gap-2">
+                <span>
+                  Showing <strong className="text-slate-700">{displayExpenses.length}</strong> of{' '}
+                  <strong className="text-slate-700">{filteredExpenses.length}</strong> expenses
+                </span>
+                <span>
+                  Period Total:{' '}
+                  <strong className="text-rose-600 font-bold tabular-nums">
+                    -{fmtMoney(displayTotal)}
+                  </strong>
+                </span>
+              </div>
             </div>
           )}
         </div>
-      )}
 
       {/* ── Add / Edit Form Modal ──────────────────────────────────────── */}
       {form && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 transition-all">
-          <div className="bg-[#fcfcfb] w-full sm:max-w-[480px] rounded-t-[24px] sm:rounded-2xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:zoom-in-95 duration-300 ease-out">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-xs p-0 sm:p-4 transition-all animate-in fade-in duration-200">
+          <div className="bg-white w-full sm:max-w-[480px] rounded-t-[24px] sm:rounded-2xl shadow-2xl flex flex-col relative overflow-hidden animate-in slide-in-from-bottom-12 sm:zoom-in-95 duration-200 ease-out">
             <div className="sm:hidden flex justify-center pt-3 pb-1 bg-white">
               <div className="w-12 h-1.5 bg-gray-200 rounded-full"></div>
             </div>
-            
-            <div className="px-6 pb-4 pt-4 sm:pt-6 bg-white flex justify-between items-start border-b border-gray-100 shrink-0">
+
+            <div className="px-6 py-4 bg-white flex justify-between items-start border-b border-slate-200/80 shrink-0">
               <div>
-                <p className="text-[10px] font-extrabold tracking-widest text-red-600/70 uppercase mb-1.5">
-                  {form.id ? 'EDIT EXPENSE' : 'NEW EXPENSE'}
-                </p>
-                <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
-                  Log Operating Cost
+                <h2 className="text-lg font-semibold text-slate-900 tracking-tight">
+                  {form.id ? 'Edit Expense' : 'Log Operating Cost'}
                 </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Record operational expenses, workshop supplies & bills
+                </p>
               </div>
-              <button 
-                onClick={() => { if(window.location.hash === '#modal') window.history.back(); else setForm(null); }}
-                className="p-2 -mr-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 transition-colors cursor-pointer"
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.location.hash === '#modal') window.history.back()
+                  else setForm(null)
+                }}
+                className="hover:bg-slate-100 rounded-lg p-1.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
               >
-                <X size={20} strokeWidth={2.5} />
+                <X size={18} strokeWidth={2.2} />
               </button>
             </div>
 
-            <form onSubmit={submit} className="p-6 bg-[#fcfcfb] space-y-5">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Category *</label>
-                  <select
-                    required
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="w-full h-[48px] sm:h-[42px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] sm:rounded-xl text-[15px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all appearance-none cursor-pointer shadow-sm"
-                  >
-                    {EXPENSE_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
+            <form onSubmit={submit} className="p-6 bg-white space-y-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5 pl-0.5">
+                  Category *
+                </label>
+                <select
+                  required
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all cursor-pointer"
+                >
+                  {EXPENSE_MODAL_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Amount (₹) *</label>
-                    <input
-                      required
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g. 1500"
-                      className="w-full h-[48px] sm:h-[42px] px-4 bg-red-50/30 border border-red-200/50 rounded-[14px] sm:rounded-xl text-[16px] sm:text-[15px] font-black tabular-nums text-red-700 placeholder:text-red-700/30 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all shadow-sm"
-                      value={form.amount}
-                      onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex-[0.8]">
-                    <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Date</label>
-                    <input
-                      type="date"
-                      required
-                      className="w-full h-[48px] sm:h-[42px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] sm:rounded-xl text-[14px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all shadow-sm"
-                      value={form.date}
-                      onChange={(e) => setForm({ ...form, date: e.target.value })}
-                    />
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-extrabold text-gray-400 uppercase mb-1.5 tracking-widest pl-1">Note (Optional)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5 pl-0.5">
+                    Amount (₹) *
+                  </label>
                   <input
-                    type="text"
-                    placeholder="e.g. Shop rent / Machine oil"
-                    className="w-full h-[48px] sm:h-[42px] px-4 bg-gray-50/50 border border-gray-200/80 rounded-[14px] sm:rounded-xl text-[14px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all shadow-sm"
-                    value={form.note}
-                    onChange={(e) => setForm({ ...form, note: e.target.value })}
+                    required
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g. 1500"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold tabular-nums text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
+                    value={form.amount}
+                    onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5 pl-0.5">
+                    Date *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
+                    value={form.date}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
                   />
                 </div>
               </div>
 
-              <div className="pt-2 flex sm:justify-end gap-3 pb-2 border-t border-gray-100 mt-2">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5 pl-0.5">
+                  Paid Via
+                </label>
+                <div className="grid grid-cols-3 gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                  {(['Cash', 'UPI', 'Bank Transfer'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setForm({ ...form, paymentMode: m })}
+                      className={`py-2 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center justify-center ${
+                        form.paymentMode === m
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5 pl-0.5">
+                  Note (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Bike Petrol / Machine Oil"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all"
+                  value={form.note}
+                  onChange={(e) => setForm({ ...form, note: e.target.value })}
+                />
+              </div>
+
+              <div className="pt-3 flex justify-end gap-3 border-t border-slate-200/80">
                 <button
                   type="button"
-                  onClick={() => { if(window.location.hash === '#modal') window.history.back(); else setForm(null); }}
+                  onClick={() => {
+                    if (window.location.hash === '#modal') window.history.back()
+                    else setForm(null)
+                  }}
                   disabled={saving}
-                  className="flex-1 sm:flex-none sm:px-6 py-3 sm:py-2.5 rounded-[14px] sm:rounded-xl font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200/50 transition-colors cursor-pointer text-[15px] sm:text-sm"
+                  className="text-slate-600 hover:bg-slate-100 rounded-lg font-medium px-4 py-2 text-sm transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-[2] sm:flex-none sm:px-8 py-3 sm:py-2.5 rounded-[14px] sm:rounded-xl font-black text-white bg-gradient-to-b from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 shadow-[0_4px_12px_rgba(239,68,68,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer border border-red-600/50 text-[15px] sm:text-sm"
+                  className="bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-medium px-5 py-2.5 shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer text-sm"
                 >
                   {saving ? 'Saving...' : 'Save Expense'}
                 </button>
@@ -362,7 +867,7 @@ export default function Expenses() {
       {!form && (
         <button
           onClick={startAdd}
-          className="sm:hidden fixed bottom-[80px] right-5 bg-gradient-to-b from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white px-6 py-4 rounded-full shadow-[0_8px_30px_-8px_rgba(239,68,68,0.5)] flex items-center gap-2.5 font-black transition-all active:scale-95 z-40 border border-red-400/50"
+          className="sm:hidden fixed bottom-[80px] right-5 bg-slate-900 hover:bg-slate-800 text-white px-6 py-4 rounded-full shadow-lg flex items-center gap-2.5 font-bold transition-all active:scale-95 z-40 border border-slate-800"
         >
           <Plus size={22} strokeWidth={3} /> <span className="tracking-wide">Log Expense</span>
         </button>

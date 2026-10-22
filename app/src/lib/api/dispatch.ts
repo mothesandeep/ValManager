@@ -3,7 +3,7 @@ import type { Dispatch, DispatchWithParty } from '../../features/dispatch/types'
 
 
 import { enqueueMutation, isNetworkError } from '../offline/sync'
-import { getPendingMutations, mergePendingMutations } from '../offline/db'
+import { getPendingMutations, mergePendingMutations, setCachedData, getCachedData } from '../offline/db'
 
 // ── Dispatches ────────────────────────────────────────────────────────────────
 
@@ -18,12 +18,10 @@ export async function fetchDispatches(): Promise<DispatchWithParty[]> {
       .order('date', { ascending: false })
     if (error) throw error
     serverData = (data ?? []) as DispatchWithParty[]
+    void setCachedData('cachedDispatches', serverData)
   } catch (err) {
-    if (!navigator.onLine) {
-      console.warn('Offline: Could not fetch dispatches')
-    } else {
-      throw err
-    }
+    console.warn('[Kasab API] Could not fetch dispatches from server, falling back to local cache:', err)
+    serverData = await getCachedData<DispatchWithParty>('cachedDispatches')
   }
 
   const pending = await getPendingMutations<DispatchWithParty>('dispatches')

@@ -1,4 +1,4 @@
-import React from 'react'
+ import React from 'react'
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
@@ -18,20 +18,10 @@ export function Button({
 
   switch (variant) {
     case 'primary':
-      variantClasses = "shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] opacity-90 hover:opacity-100"
-      variantStyle = {
-        background: 'var(--color-brass)',
-        color: '#ffffff',
-        border: '1px solid var(--color-brass-dark)',
-      }
+      variantClasses = "bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-lg shadow-xs border border-slate-900 active:scale-[0.98]"
       break
     case 'secondary':
-      variantClasses = "shadow-[var(--shadow-sm)] hover:bg-[var(--color-paper)]"
-      variantStyle = {
-        background: 'var(--color-card)',
-        color: 'var(--color-ink)',
-        border: '1px solid var(--color-border)',
-      }
+      variantClasses = "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/80 shadow-xs rounded-lg active:scale-[0.98] font-medium"
       break
     case 'ghost':
       variantClasses = "hover:bg-[var(--color-border-soft)]"

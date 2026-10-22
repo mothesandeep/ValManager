@@ -78,9 +78,9 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/40 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
       <div
-        className="relative w-full max-w-2xl bg-[var(--color-card)] rounded-[var(--radius-xl)] shadow-[var(--shadow-lg)] border border-[var(--color-border)] flex flex-col max-h-[92vh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150"
+        className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] overflow-hidden my-auto animate-in zoom-in-95 duration-200"
       >
         {/* ── Modal Header ────────────────────────────────────────── */}
         <div className="p-4 sm:p-5 border-b border-[var(--color-border)] bg-[var(--color-paper)] flex items-start justify-between gap-3 shrink-0">
@@ -92,7 +92,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
               >
                 {party.name}
               </h2>
-              <span className="text-xs px-2 py-0.5 rounded-md bg-[var(--color-brass)]/15 text-[var(--color-brass)] font-semibold shrink-0">
+              <span className="text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/80 font-semibold shrink-0">
                 Statement / Khata
               </span>
             </div>
@@ -157,7 +157,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                     className="p-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] shadow-[var(--shadow-sm)] flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:shadow-[var(--shadow-md)] transition-shadow"
                   >
                     <div className="flex items-start gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-800 flex items-center justify-center shrink-0 mt-0.5">
                         <PackagePlus size={16} strokeWidth={2.2} />
                       </div>
                       <div>
@@ -180,7 +180,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
 
                     <div className="flex items-center justify-between sm:justify-end gap-3 pl-10 sm:pl-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-[var(--color-border-soft)]">
                       <div className="text-left sm:text-right">
-                        <div className="text-xs font-bold text-amber-700 tabular-nums">
+                        <div className="text-xs font-semibold text-slate-900 tabular-nums">
                           +{fmtKg(r.net_weight)}
                         </div>
                         <div className="text-[10px] text-[var(--color-ink-soft)]">
@@ -202,7 +202,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                     className="p-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] shadow-[var(--shadow-sm)] flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:shadow-[var(--shadow-md)] transition-shadow"
                   >
                     <div className="flex items-start gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-800 flex items-center justify-center shrink-0 mt-0.5">
                         <Truck size={16} strokeWidth={2.2} />
                       </div>
                       <div>
@@ -216,7 +216,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
                             </span>
                           )}
                           {!isKali && d.cord_count && (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-bold">
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 font-medium">
                               {d.cord_count} Tar ({d.twist_type || 'S'})
                             </span>
                           )}
@@ -235,9 +235,9 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
 
                     <div className="flex items-center justify-between sm:justify-end gap-3 pl-10 sm:pl-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-[var(--color-border-soft)]">
                       <div className="text-left sm:text-right">
-                        <div className="text-xs font-bold text-blue-700 tabular-nums">
-                          {isKali ? fmtKg(d.bore_gross_weight) : fmtKg(d.net_val_weight || 0)}
-                          {!isKali && d.amount ? ` • ${fmtMoney(d.amount)}` : ''}
+                        <div className="text-xs tabular-nums">
+                          <span className="font-semibold text-slate-900">{isKali ? fmtKg(d.bore_gross_weight) : fmtKg(d.net_val_weight || 0)}</span>
+                          {!isKali && d.amount ? <span className="font-semibold text-emerald-700"> • {fmtMoney(d.amount)}</span> : ''}
                         </div>
                         <div className="text-[10px] text-[var(--color-ink-soft)]">
                           {fmtDate(d.date)}
@@ -296,7 +296,7 @@ export const PartyKhataModal: React.FC<PartyKhataModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 rounded-lg text-xs font-bold bg-[var(--color-ink)] text-white hover:bg-black active:scale-95 transition-all cursor-pointer"
+            className="px-4 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 active:scale-95 transition-all cursor-pointer shadow-xs"
           >
             Close
           </button>

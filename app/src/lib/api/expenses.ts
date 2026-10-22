@@ -3,7 +3,7 @@ import type { Expense } from '../../features/expenses/types'
 
 
 import { enqueueMutation, isNetworkError } from '../offline/sync'
-import { getPendingMutations, mergePendingMutations } from '../offline/db'
+import { getPendingMutations, mergePendingMutations, setCachedData, getCachedData } from '../offline/db'
 
 // ── Expenses ──────────────────────────────────────────────────────────────────
 
@@ -18,12 +18,10 @@ export async function fetchExpenses(): Promise<Expense[]> {
       .order('date', { ascending: false })
     if (error) throw error
     serverData = data ?? []
+    void setCachedData('cachedExpenses', serverData)
   } catch (err) {
-    if (!navigator.onLine) {
-      console.warn('Offline: Could not fetch expenses')
-    } else {
-      throw err
-    }
+    console.warn('[Kasab API] Could not fetch expenses from server, falling back to local cache:', err)
+    serverData = await getCachedData<Expense>('cachedExpenses')
   }
 
   const pending = await getPendingMutations<Expense>('expenses')

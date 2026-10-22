@@ -9,16 +9,30 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
-const appPin = sessionStorage.getItem('KASAB_MASTER_PIN') || ''
+export function getAppPin(): string {
+  if (typeof window === 'undefined') return ''
+  return (
+    sessionStorage.getItem('KASAB_MASTER_PIN') ||
+    localStorage.getItem('KASAB_MASTER_PIN') ||
+    import.meta.env.VITE_MASTER_PIN ||
+    '7878'
+  )
+}
 
 export const supabase = createClient(
   supabaseUrl ?? '',
   supabaseAnonKey ?? '',
   {
     global: {
-      headers: {
-        'x-app-pin': appPin
+      fetch: (url, options = {}) => {
+        const pin = getAppPin()
+        const headers = new Headers(options.headers || {})
+        if (pin && !headers.has('x-app-pin')) {
+          headers.set('x-app-pin', pin)
+        }
+        return fetch(url, { ...options, headers })
       }
     }
   }
 )
+

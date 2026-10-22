@@ -35,7 +35,14 @@ export function getGlobalSettings(): AppGlobalSettings {
       localStorage.getItem(LEGACY_STORAGE_KEY_ROLA)
     if (savedRola) {
       const parsed = parseInt(savedRola, 10)
-      if (!isNaN(parsed) && parsed > 0) rola = parsed
+      if (!isNaN(parsed) && parsed >= 50) {
+        rola = parsed
+      } else {
+        rola = STANDARD_ROLA_WEIGHT_G
+        try {
+          localStorage.setItem(STORAGE_KEY_GLOBAL_ROLA, String(STANDARD_ROLA_WEIGHT_G))
+        } catch {}
+      }
     }
 
     const savedBigRola = localStorage.getItem(STORAGE_KEY_GLOBAL_BIG_ROLA)

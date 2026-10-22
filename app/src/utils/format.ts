@@ -1,11 +1,18 @@
+const currencyFormatter = new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  maximumFractionDigits: 0,
+})
+
 export function fmtMoney(n: number | null | undefined): string {
-  return `₹${(Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+  const val = Number(n) || 0
+  return currencyFormatter.format(val)
 }
 
 export function fmtKg(n: number | null | undefined): string {
-  if (n === null || n === undefined) return '—';
-  const val = Number(n) || 0;
-  return `${val.toFixed(3)} kg`;
+  if (n === null || n === undefined) return '—'
+  const val = Number(n) || 0
+  return `${val.toFixed(3)} kg`
 }
 
 export function kgToGrams(kg: number | string | null | undefined): string {

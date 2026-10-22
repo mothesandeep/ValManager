@@ -13,16 +13,66 @@ export interface SyncOperation {
 
 export class OfflineDB extends Dexie {
   syncQueue!: Table<SyncOperation>
+  cachedParties!: Table<any, string>
+  cachedReceipts!: Table<any, string>
+  cachedDispatches!: Table<any, string>
+  cachedExpenses!: Table<any, string>
+  cachedPayments!: Table<any, string>
 
   constructor() {
     super('KasabValOfflineDB')
     this.version(1).stores({
       syncQueue: '++id, table, action, record_id, created_at'
     })
+    this.version(2).stores({
+      syncQueue: '++id, table, action, record_id, created_at',
+      cachedParties: 'id, name',
+      cachedReceipts: 'id, date, party_id',
+      cachedDispatches: 'id, date, party_id',
+      cachedExpenses: 'id, date',
+      cachedPayments: 'id, date, party_id'
+    })
   }
 }
 
 export const db = new OfflineDB()
+
+export type CachedTableName =
+  | 'cachedParties'
+  | 'cachedReceipts'
+  | 'cachedDispatches'
+  | 'cachedExpenses'
+  | 'cachedPayments'
+
+/** Cache fresh server data locally so data persists offline / across server downtime */
+export async function setCachedData<T extends { id: string }>(
+  tableName: CachedTableName,
+  items: T[]
+): Promise<void> {
+  try {
+    const table = db[tableName]
+    if (table && Array.isArray(items) && items.length > 0) {
+      await table.bulkPut(items)
+    }
+  } catch (err) {
+    console.warn(`[Kasab OfflineDB] Failed to cache ${tableName}:`, err)
+  }
+}
+
+/** Retrieve locally cached records */
+export async function getCachedData<T extends { id: string }>(
+  tableName: CachedTableName
+): Promise<T[]> {
+  try {
+    const table = db[tableName]
+    if (table) {
+      return (await table.toArray()) as T[]
+    }
+  } catch (err) {
+    console.warn(`[Kasab OfflineDB] Failed to read ${tableName}:`, err)
+  }
+  return []
+}
 
 /** Helper to extract all pending operations for a specific table */
 export async function getPendingMutations<T extends { id: string }>(

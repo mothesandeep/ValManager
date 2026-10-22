@@ -7,6 +7,7 @@ import {
   Wallet,
   TrendingUp,
   Users,
+  Plus,
 } from 'lucide-react'
 import { fetchParties } from '../lib/api/parties'
 import { fetchReceipts } from '../lib/api/receipts'
@@ -24,7 +25,12 @@ import type { Expense } from '../features/expenses/types'
 import { fmtDate } from '../utils/date'
 import { fmtKg, fmtMoney } from '../utils/format'
 import { PageHeader } from '../components/ui/PageHeader'
-import { EmptyState } from '../components/ui/EmptyState'
+
+const fmtShortDate = (d?: string | null) => {
+  if (!d) return '—'
+  const dt = new Date(d + 'T00:00:00')
+  return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+}
 
 const isRolaEntry = (d: DispatchWithParty) => d.dispatch_type === 'Kali' || d.dispatch_type === 'Rola'
 
@@ -59,7 +65,7 @@ type ChallanGroup = {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { filterByMonth } = useMonth()
+  const { filterByMonth, isAllTime, formattedMonth, setAllTime } = useMonth()
   const [parties, setParties] = useState<Party[]>([])
   const [receipts, setReceipts] = useState<ReceiptWithParty[]>([])
   const [dispatches, setDispatches] = useState<DispatchWithParty[]>([])
@@ -222,7 +228,7 @@ export default function Dashboard() {
   }, [monthReceipts])
 
   return (
-    <div className="space-y-5 pb-8 animate-in fade-in duration-500 max-w-5xl mx-auto w-full">
+    <div className="space-y-5 pb-8 animate-in fade-in duration-500 w-full">
       {/* Title — hidden on mobile, visible on desktop */}
       <div className="hidden sm:block">
         <PageHeader
@@ -235,7 +241,7 @@ export default function Dashboard() {
 
       {/* Hero Numbers (Primary KPIs) */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <div className="rounded-[24px] p-5 sm:p-6 bg-white shadow-sm border border-gray-100 flex flex-col group hover:shadow-md transition-shadow">
+        <div className="rounded-xl p-5 sm:p-6 bg-white shadow-sm border border-slate-200/60 flex flex-col group hover:shadow-md transition-shadow">
           <div className="flex items-center gap-2.5 mb-5 sm:mb-6">
             <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
               <Wallet size={16} className="text-amber-600" />
@@ -256,13 +262,13 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="rounded-[24px] p-5 sm:p-6 bg-white shadow-sm border border-gray-100 flex flex-col group hover:shadow-md transition-shadow">
+        <div className="rounded-xl p-5 sm:p-6 bg-white shadow-sm border border-slate-200/60 flex flex-col group hover:shadow-md transition-shadow">
           <div className="flex items-center gap-2.5 mb-5 sm:mb-6">
             <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
               <TrendingUp size={16} className="text-emerald-600" />
             </div>
             <h2 className="text-[12px] font-black text-[#58a176] uppercase tracking-widest leading-[1.15] opacity-80">
-              Monthly<br/>Earnings
+              {isAllTime ? 'Total' : 'Monthly'}<br/>Earnings
             </h2>
           </div>
           <div>
@@ -273,7 +279,9 @@ export default function Dashboard() {
                 {fmtMoney(monthRevenue)}
               </div>
             )}
-            <div className="text-[11px] font-semibold text-gray-400 mt-1.5 tracking-wide">Current month's earnings</div>
+            <div className="text-[11px] font-semibold text-gray-400 mt-1.5 tracking-wide">
+              {isAllTime ? 'All-time earnings' : `${formattedMonth}'s earnings`}
+            </div>
           </div>
         </div>
       </div>
@@ -281,27 +289,27 @@ export default function Dashboard() {
       {/* 4 Secondary Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { label: 'Val Dispatched', value: fmtKg(monthDispatchNet), sub: null, color: 'text-gray-900' },
-          { label: 'Kasab Received', value: fmtKg(monthReceivedNet), sub: null, color: 'text-[var(--color-brass)]' },
-          { label: 'Rola Pending', value: `${rolaPending} pcs`, sub: 'with parties', color: rolaPending > 0 ? 'text-[var(--color-brass)]' : 'text-gray-400' },
-          { label: 'Expenses', value: fmtMoney(monthExpenses), sub: null, color: monthExpenses > 0 ? 'text-[var(--color-due)]' : 'text-gray-400' },
+          { label: isAllTime ? 'Val Dispatched' : `Val (${formattedMonth})`, value: fmtKg(monthDispatchNet), sub: isAllTime ? 'All time' : null, color: 'text-slate-900' },
+          { label: isAllTime ? 'Kasab Received' : `Kasab (${formattedMonth})`, value: fmtKg(monthReceivedNet), sub: isAllTime ? 'All time' : null, color: 'text-slate-900' },
+          { label: 'Rola Pending', value: `${rolaPending} pcs`, sub: 'with parties', color: rolaPending > 0 ? 'text-slate-900' : 'text-slate-400' },
+          { label: isAllTime ? 'Total Expenses' : `Expenses (${formattedMonth})`, value: fmtMoney(monthExpenses), sub: isAllTime ? 'All time' : null, color: monthExpenses > 0 ? 'text-rose-600' : 'text-slate-400' },
         ].map(({ label, value, sub, color }) => (
           <div
             key={label}
-            className="rounded-[16px] px-4 py-3 sm:py-3.5 bg-white shadow-sm border border-gray-100 transition-shadow hover:shadow-md"
+            className="rounded-xl px-4 py-3 sm:py-3.5 bg-white shadow-xs border border-slate-200/80 transition-shadow hover:shadow-sm"
           >
-            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">
               {label}
             </div>
             {loading ? (
-              <div className="h-6 w-16 rounded bg-gray-100 animate-pulse mb-1" />
+              <div className="h-6 w-16 rounded bg-slate-100 animate-pulse mb-1" />
             ) : (
-              <div className={`text-[19px] sm:text-[22px] font-black tabular-nums leading-none tracking-tighter ${color} ${sub ? 'mb-1' : ''}`}>
+              <div className={`text-[19px] sm:text-[22px] font-semibold tabular-nums leading-none tracking-tight ${color} ${sub ? 'mb-1' : ''}`}>
                 {value}
               </div>
             )}
             {sub && (
-              <div className="text-[11px] font-medium text-gray-400 truncate">
+              <div className="text-[11px] font-medium text-slate-400 truncate">
                 {sub}
               </div>
             )}
@@ -310,243 +318,311 @@ export default function Dashboard() {
       </div>
 
       {/* 2-Column Side-by-Side: Recent Received (Left) & Recent Dispatch (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 items-start pt-2">
-        {/* Left Column: Recent Received */}
-        <div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 items-stretch pt-2">
+        {/* Left Column: Recent Inward Receipts */}
+        <div className="flex flex-col h-full">
           <div className="flex items-center justify-between mb-4 px-1">
-            <h3 className="font-extrabold text-[17px] tracking-tight text-gray-900">
-              Recent Received
+            <h3 className="font-extrabold text-[17px] tracking-tight text-slate-900">
+              Recent Inward Receipts
             </h3>
             <Link
               to="/receiving"
-              className="text-sm font-bold flex items-center gap-0.5 text-[var(--color-brass)] hover:text-[var(--color-brass-dark)] transition-colors"
+              className="text-sm font-semibold flex items-center gap-0.5 text-slate-600 hover:text-slate-900 transition-colors"
             >
-              View all <ChevronRight size={16} strokeWidth={2.5} />
+              View all <ChevronRight size={16} strokeWidth={2.2} />
             </Link>
           </div>
 
           {loading ? (
-            <div className="bg-white rounded-[24px] shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden divide-y divide-gray-100">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-[76px] p-4 flex items-center gap-4">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200/60 overflow-hidden divide-y divide-gray-100 flex-1">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-[68px] p-4 flex items-center gap-4">
                   <div className="h-4 w-32 bg-gray-100 rounded animate-pulse"></div>
                   <div className="h-4 w-16 bg-gray-100 rounded animate-pulse ml-auto"></div>
                 </div>
               ))}
             </div>
           ) : recentReceiptGroups.length === 0 ? (
-            <div className="rounded-[24px] border-2 border-dashed border-gray-200 py-10 flex flex-col items-center justify-center text-center">
+            <div className="rounded-xl border-2 border-dashed border-gray-200 py-10 px-4 flex flex-col items-center justify-center text-center flex-1 bg-white">
               <PackagePlus size={32} className="text-gray-300 mb-3" />
-              <div className="text-[13px] font-bold text-gray-500">No receiving entries this month</div>
+              <div className="text-[13px] font-bold text-gray-500">
+                {isAllTime ? 'No receiving entries recorded' : `No receiving entries in ${formattedMonth}`}
+              </div>
+              {!isAllTime && receipts.length > 0 && (
+                <button
+                  type="button"
+                  onClick={setAllTime}
+                  className="mt-2.5 text-xs font-bold text-[var(--color-brass)] hover:underline cursor-pointer"
+                >
+                  View all {receipts.length} entries in All Time
+                </button>
+              )}
             </div>
           ) : (
-            <div className="bg-white rounded-[24px] shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden divide-y divide-gray-100/80">
-              {recentReceiptGroups.map((group) => {
-                const uniqueColors = Array.from(new Set(group.entries.map(e => e.color).filter(Boolean)))
-                return (
-                  <div
-                    key={group.key}
-                    onClick={() => navigate('/receiving')}
-                    className="px-5 py-4 cursor-pointer hover:bg-amber-50/30 transition-colors group"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-wrap mb-3">
-                      {group.challanNo ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-amber-50 text-amber-800 border border-amber-200/50">
-                          Ch. #{group.challanNo}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-gray-50 text-gray-500 border border-gray-200/50">
-                          No Ch.
-                        </span>
-                      )}
-                      <span className="font-bold text-[15px] text-gray-900 truncate group-hover:text-[#a57b3f] transition-colors">
-                        {group.partyName}
-                      </span>
-                      <span className="text-[11px] text-gray-400 font-medium ml-auto">
-                        {fmtDate(group.date)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4 sm:gap-6 min-w-0">
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
-                            Net Kasab
-                          </span>
-                          <span className="text-[15px] font-black tabular-nums tracking-tight text-[#a57b3f]">
-                            {fmtKg(group.totalNet)}
-                          </span>
-                        </div>
-
-                        {group.totalRolaCount > 0 && (
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
-                              Rola
+            <div className="bg-white rounded-xl shadow-xs border border-slate-200/80 overflow-x-auto flex-1 flex flex-col justify-between">
+              <table className="w-full text-left border-collapse whitespace-nowrap">
+                <thead>
+                  <tr className="border-b border-slate-200/80 bg-slate-50/75">
+                    <th className="pl-4 pr-1.5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Date / Ch.</th>
+                    <th className="px-2 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Party</th>
+                    <th className="px-2 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Items</th>
+                    <th className="px-2 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 text-right">Net Wt</th>
+                    <th className="pl-2 pr-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 text-right">Bags</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {recentReceiptGroups.map((group) => {
+                    const uniqueColors = Array.from(new Set(group.entries.map(e => e.color).filter(Boolean)))
+                    const primaryColor = uniqueColors[0] || '—'
+                    const extraColorsCount = uniqueColors.length - 1
+                    return (
+                      <tr
+                        key={group.key}
+                        onClick={() => navigate('/receiving')}
+                        className="cursor-pointer hover:bg-slate-50/75 transition-colors group"
+                      >
+                        <td className="pl-4 pr-1.5 py-3.5 align-middle">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[11px] text-slate-500 font-medium leading-none whitespace-nowrap" title={fmtDate(group.date)}>
+                              {fmtShortDate(group.date)}
                             </span>
-                            <span className="text-[15px] font-black tabular-nums tracking-tight text-gray-700">
-                              {group.totalRolaCount} <span className="text-[11px] font-bold text-gray-400">pcs</span>
-                            </span>
+                            {group.challanNo ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md font-mono text-xs font-medium tracking-wide bg-slate-100 text-slate-700 border border-slate-200/60 w-fit leading-none">
+                                #{group.challanNo}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md font-mono text-xs font-medium tracking-wide bg-slate-100 text-slate-500 border border-slate-200/60 w-fit leading-none">
+                                No Ch.
+                              </span>
+                            )}
                           </div>
-                        )}
-                        
-                        {uniqueColors.length > 0 && (
-                          <div className="flex flex-col min-w-0 flex-1">
-                            <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
-                              Item
+                        </td>
+                        <td className="px-2 py-3.5 align-middle">
+                          <span className="font-medium text-[13px] text-slate-900 whitespace-nowrap block" title={group.partyName}>
+                            {group.partyName}
+                          </span>
+                        </td>
+                        <td className="px-2 py-3.5 align-middle">
+                          <div className="flex items-center gap-1">
+                            <span
+                              className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-200/70 text-[10.5px] font-semibold max-w-[85px] truncate"
+                              title={primaryColor}
+                            >
+                              {primaryColor}
                             </span>
-                            <span className="text-[13px] font-bold tracking-tight text-gray-500 truncate">
-                              {uniqueColors.join(', ')}
-                            </span>
+                            {extraColorsCount > 0 && (
+                              <span
+                                title={uniqueColors.slice(1).join(', ')}
+                                className="inline-flex items-center px-1 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/60 text-[9.5px] font-bold cursor-help shrink-0"
+                              >
+                                +{extraColorsCount}
+                              </span>
+                            )}
                           </div>
-                        )}
-                      </div>
-                      
-                      <div className="flex flex-col items-end shrink-0">
-                         <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
-                            Bags
-                         </span>
-                         <span className="text-[15px] font-black text-gray-600">
-                           {group.entries.length}
-                         </span>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+                        </td>
+                        <td className="px-2 py-3.5 align-middle text-right">
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="text-[13px] font-semibold tabular-nums text-slate-900 leading-none whitespace-nowrap">
+                              {fmtKg(group.totalNet)}
+                            </span>
+                            {group.totalRolaCount > 0 && (
+                              <span className="text-[9.5px] font-medium tracking-wide text-slate-500 whitespace-nowrap">
+                                Rola: {group.totalRolaCount}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="pl-2 pr-5 py-3.5 align-middle text-right">
+                          <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-md text-[11px] font-bold text-slate-700 bg-slate-100 border border-slate-200/70">
+                            {group.entries.length}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
 
-        {/* Right Column: Recent Dispatch */}
-        <div>
+        {/* Right Column: Recent Outward Dispatch */}
+        <div className="flex flex-col h-full">
           <div className="flex items-center justify-between mb-4 px-1">
-            <h3 className="font-extrabold text-[17px] tracking-tight text-gray-900">
-              Recent Dispatch
+            <h3 className="font-extrabold text-[17px] tracking-tight text-slate-900">
+              Recent Outward Dispatch
             </h3>
             <Link
               to="/dispatch"
-              className="text-sm font-bold flex items-center gap-0.5 text-[var(--color-brass)] hover:text-[var(--color-brass-dark)] transition-colors"
+              className="text-sm font-semibold flex items-center gap-0.5 text-slate-600 hover:text-slate-900 transition-colors"
             >
-              View all <ChevronRight size={16} strokeWidth={2.5} />
+              View all <ChevronRight size={16} strokeWidth={2.2} />
             </Link>
           </div>
 
           {loading ? (
-            <div className="bg-white rounded-[24px] shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden divide-y divide-gray-100">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-[96px] p-4 flex items-center gap-4">
+            <div className="bg-white rounded-xl shadow-xs border border-slate-200/80 overflow-hidden divide-y divide-gray-100 flex-1">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-[68px] p-4 flex items-center gap-4">
                   <div className="h-4 w-32 bg-gray-100 rounded animate-pulse"></div>
                   <div className="h-4 w-16 bg-gray-100 rounded animate-pulse ml-auto"></div>
                 </div>
               ))}
             </div>
           ) : recentChallanGroups.length === 0 ? (
-            <div className="py-6">
-              <EmptyState icon={Truck} text="No dispatch entries this month. Entries will appear here once recorded." />
+            <div className="rounded-xl border-2 border-dashed border-gray-200 py-10 px-4 flex flex-col items-center justify-center text-center flex-1 bg-white">
+              <Truck size={32} className="text-gray-300 mb-3" />
+              <div className="text-[13px] font-bold text-gray-500">
+                {isAllTime ? 'No dispatch entries recorded' : `No dispatch entries in ${formattedMonth}`}
+              </div>
+              {!isAllTime && dispatches.length > 0 && (
+                <button
+                  type="button"
+                  onClick={setAllTime}
+                  className="mt-2.5 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:underline cursor-pointer"
+                >
+                  View all {dispatches.length} entries in All Time
+                </button>
+              )}
             </div>
           ) : (
-            <div className="bg-white rounded-[24px] shadow-[0_4px_20px_-6px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden divide-y divide-gray-100/80">
-              {recentChallanGroups.map((group) => (
-                <div
-                  key={group.key}
-                  onClick={() => navigate('/dispatch')}
-                  className="px-5 py-4 cursor-pointer hover:bg-amber-50/30 transition-colors group"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0 flex-wrap mb-3">
-                    {group.challanNo ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-amber-50 text-amber-800 border border-amber-200/50">
-                        Ch. #{group.challanNo}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wide bg-gray-50 text-gray-500 border border-gray-200/50">
-                        No Ch.
-                      </span>
-                    )}
-                    <span className="font-bold text-[15px] text-gray-900 truncate group-hover:text-[#a57b3f] transition-colors">
-                      {group.partyName}
-                    </span>
-                    <span className="text-[11px] text-gray-400 font-medium ml-auto">
-                      {fmtDate(group.date)}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 sm:gap-6 min-w-0">
-                      {group.totalValNet > 0 && (
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
-                            Net Val
+            <div className="bg-white rounded-xl shadow-xs border border-slate-200/80 overflow-x-auto flex-1 flex flex-col justify-between">
+              <table className="w-full text-left border-collapse whitespace-nowrap">
+                <thead>
+                  <tr className="border-b border-slate-200/80 bg-slate-50/75">
+                    <th className="pl-4 pr-1.5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Date / Ch.</th>
+                    <th className="px-2 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Party</th>
+                    <th className="px-2 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 text-right">Net Wt</th>
+                    <th className="px-2 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 text-right">Rola</th>
+                    <th className="pl-2 pr-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {recentChallanGroups.map((group) => (
+                    <tr
+                      key={group.key}
+                      onClick={() => navigate('/dispatch')}
+                      className="cursor-pointer hover:bg-slate-50/75 transition-colors group"
+                    >
+                      <td className="pl-4 pr-1.5 py-3.5 align-middle">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[11px] text-slate-500 font-medium leading-none whitespace-nowrap" title={fmtDate(group.date)}>
+                            {fmtShortDate(group.date)}
                           </span>
-                          <span className="text-[15px] font-black tabular-nums tracking-tight text-[#a57b3f]">
+                          {group.challanNo ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md font-mono text-xs font-medium tracking-wide bg-slate-100 text-slate-700 border border-slate-200/60 w-fit leading-none">
+                              #{group.challanNo}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md font-mono text-xs font-medium tracking-wide bg-slate-100 text-slate-500 border border-slate-200/60 w-fit leading-none">
+                              No Ch.
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-2 py-3.5 align-middle">
+                        <span className="font-medium text-[13px] text-slate-900 whitespace-nowrap block" title={group.partyName}>
+                          {group.partyName}
+                        </span>
+                      </td>
+                      <td className="px-2 py-3.5 align-middle text-right">
+                        {group.totalValNet > 0 ? (
+                          <span className="text-[13px] font-semibold tabular-nums text-slate-900 whitespace-nowrap">
                             {fmtKg(group.totalValNet)}
                           </span>
-                        </div>
-                      )}
-
-                      {group.hasRola && group.totalRolaGross > 0 && (
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
-                            Rola Wt
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-3.5 align-middle text-right">
+                        {group.hasRola && (group.totalRolaGross > 0 || group.totalRolaCount > 0) ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            {group.totalRolaGross > 0 && (
+                              <span className="text-[12px] font-medium tabular-nums text-slate-700 leading-none whitespace-nowrap">
+                                {fmtKg(group.totalRolaGross)}
+                              </span>
+                            )}
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-mono font-medium tracking-wide bg-slate-100 text-slate-700 border border-slate-200/60 whitespace-nowrap">
+                              {group.totalRolaCount} pcs
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-medium text-slate-400 bg-slate-50 border border-slate-200/60">
+                            0 pcs
                           </span>
-                          <span className="text-[15px] font-black tabular-nums tracking-tight text-gray-700">
-                            {fmtKg(group.totalRolaGross)}
+                        )}
+                      </td>
+                      <td className="pl-2 pr-5 py-3.5 align-middle text-right">
+                        {group.totalAmount > 0 ? (
+                          <span className="inline-flex items-center text-[12.5px] font-semibold tabular-nums text-emerald-700 whitespace-nowrap">
+                            {fmtMoney(group.totalAmount)}
                           </span>
-                        </div>
-                      )}
-
-                      {group.hasRola && group.totalRolaCount > 0 && (
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
-                            Return
-                          </span>
-                          <span className="text-[15px] font-black tabular-nums tracking-tight text-gray-700">
-                            {group.totalRolaCount} <span className="text-[11px] font-bold text-gray-400">pcs</span>
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {group.totalAmount > 0 && (
-                      <div className="flex flex-col text-right shrink-0 bg-green-50/50 px-2.5 py-1 rounded-lg border border-green-100/50">
-                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-600/70 mb-0.5">
-                          Amount
-                        </span>
-                        <span className="text-[15px] font-black tabular-nums tracking-tight text-emerald-600">
-                          {fmtMoney(group.totalAmount)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+                        ) : (
+                          <span className="text-slate-300 text-sm">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
       </div>
 
+      {/* Bottom: Quick Operations & Party Directory Widget */}
       <div className="pt-2">
-        <button
-          type="button"
-          className="w-full flex items-center justify-between p-4 sm:p-5 rounded-[24px] border border-gray-100 bg-white shadow-sm hover:shadow-md active:scale-[0.99] transition-all group cursor-pointer"
-          onClick={() => navigate('/parties')}
-        >
-          <div className="flex items-center gap-4 text-left">
-            <div className="w-12 h-12 rounded-[16px] bg-[#a57b3f]/10 flex items-center justify-center shrink-0 group-hover:bg-[#a57b3f] transition-colors">
-               <Users size={24} className="text-[#a57b3f] group-hover:text-white transition-colors" />
+        <div className="rounded-xl border border-slate-200/80 bg-white shadow-xs p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* Left: Party Directory info link */}
+          <Link
+            to="/parties"
+            className="flex items-center gap-3.5 group cursor-pointer"
+          >
+            <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 group-hover:bg-slate-900 transition-colors">
+              <Users size={22} className="text-slate-700 group-hover:text-white transition-colors" />
             </div>
             <div>
-              <div className="font-bold text-[17px] text-gray-900 tracking-tight">
-                Party Directory
+              <div className="flex items-center gap-1.5 font-bold text-[16px] text-slate-900 tracking-tight group-hover:text-slate-900 group-hover:underline transition-colors">
+                <span>Party Directory</span>
+                <span className="text-xs font-semibold text-slate-400">
+                  ({loading ? '...' : parties.length} registered accounts)
+                </span>
+                <ChevronRight size={16} className="text-slate-400 group-hover:translate-x-0.5 transition-all" />
               </div>
-              <div className="text-[13px] font-medium text-gray-400 mt-0.5">
-                {loading ? 'Loading...' : `${parties.length} registered parties`}
+              <div className="text-[12px] font-medium text-slate-500 mt-0.5">
+                View party ledgers, outstanding balances & contact masters
               </div>
             </div>
+          </Link>
+
+          {/* Right: Quick Action shortcut buttons */}
+          <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
+            <button
+              type="button"
+              onClick={() => navigate('/receiving')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 text-white shadow-xs border border-slate-900 active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <Plus size={14} strokeWidth={2.5} className="text-white" />
+              <span>New Inward</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/dispatch')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 text-white shadow-xs border border-slate-900 active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <Plus size={14} strokeWidth={2.5} className="text-white" />
+              <span>New Dispatch</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/payments')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 text-white shadow-xs border border-slate-900 active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <Plus size={14} strokeWidth={2.5} className="text-white" />
+              <span>Record Payment</span>
+            </button>
           </div>
-          <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-[#a57b3f]/10 transition-colors">
-            <ChevronRight size={20} className="text-gray-400 group-hover:text-[#a57b3f] transition-colors" />
-          </div>
-        </button>
+        </div>
       </div>
     </div>
   )

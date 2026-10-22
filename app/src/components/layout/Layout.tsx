@@ -16,80 +16,118 @@ import {
 import { Logo } from '../ui/Logo'
 import MonthSelector from '../common/MonthSelector'
 import { useSync } from '../../context/SyncContext'
-import { Cloud, CloudOff, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
+import { fetchParties } from '../../lib/api/parties'
+import { fetchReceipts } from '../../lib/api/receipts'
+import { fetchDispatches } from '../../lib/api/dispatch'
+import { fetchPayments } from '../../lib/api/payments'
+import { fetchExpenses } from '../../lib/api/expenses'
 
 function SyncIndicator() {
   const { isOnline, isSyncing, pendingCount } = useSync()
 
   if (!isOnline) {
     return (
-      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-red-50 text-red-500 border border-red-100">
-        <CloudOff size={14} strokeWidth={2.5} />
-        <span className="text-[10px] font-bold tracking-wide">
-          {pendingCount > 0 ? `${pendingCount} pending` : 'Offline'}
-        </span>
+      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 text-rose-600 border border-rose-200/70 text-[11px] font-semibold tracking-wide shrink-0 shadow-xs" title="Offline - Working with local cache">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+        <span>{pendingCount > 0 ? `${pendingCount} offline` : 'Offline'}</span>
       </div>
     )
   }
 
   if (isSyncing) {
     return (
-      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-50 text-blue-500 border border-blue-100">
-        <RefreshCw size={14} strokeWidth={2.5} className="animate-spin" />
-        <span className="text-[10px] font-bold tracking-wide">Syncing...</span>
+      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-50 text-sky-600 border border-sky-200/70 text-[11px] font-semibold tracking-wide shrink-0 shadow-xs" title="Syncing changes...">
+        <RefreshCw size={12} strokeWidth={2.5} className="animate-spin text-sky-500" />
+        <span>Syncing...</span>
       </div>
     )
   }
 
   if (pendingCount > 0) {
     return (
-      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-yellow-50 text-yellow-600 border border-yellow-200">
-        <Cloud size={14} strokeWidth={2.5} />
-        <span className="text-[10px] font-bold tracking-wide">{pendingCount} pending</span>
+      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200/80 text-[11px] font-semibold tracking-wide shrink-0 shadow-xs" title={`${pendingCount} mutations queued`}>
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+        <span>{pendingCount} pending</span>
       </div>
     )
   }
 
   return (
-    <div className="flex items-center gap-1.5 px-1.5 sm:px-2 py-1 rounded-full bg-emerald-50 text-emerald-500 border border-emerald-100 opacity-50" title="Synced">
-      <Cloud size={14} strokeWidth={2.5} />
-      <span className="hidden sm:inline text-[10px] font-bold tracking-wide">Synced</span>
+    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50/90 text-emerald-700 border border-emerald-200/60 text-[11px] font-semibold tracking-wide shrink-0 shadow-xs select-none h-[36px]" title="All data synced & secured">
+      <span className="relative flex h-2 w-2 shrink-0">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+      </span>
+      <span className="hidden sm:inline">Synced</span>
     </div>
   )
 }
 
-// All routes in the application
-export const ALL_NAV_ITEMS = [
-  { to: '/',           label: 'Dashboard',        icon: LayoutDashboard, desc: 'Overview & quick metrics' },
-  { to: '/parties',    label: 'Parties',          icon: Users,           desc: 'Customer directory & balances' },
-  { to: '/receiving',  label: 'Received',        icon: PackagePlus,     desc: 'Raw yarn entry & tare weight' },
-  { to: '/dispatch',   label: 'Dispatch',         icon: Truck,           desc: 'Finished kasab deliveries' },
+// All routes grouped into ERP sections
+export interface NavItem {
+  to: string
+  label: string
+  icon: typeof LayoutDashboard
+  desc: string
+}
 
-  { to: '/payments',   label: 'Payments',         icon: IndianRupee,     desc: 'Party payment receipts' },
-  { to: '/expenses',   label: 'Expenses',         icon: Receipt,         desc: 'Daily business expenses' },
-  { to: '/reports',    label: 'Reports',          icon: BarChart3,       desc: 'Financial & party ledgers' },
-  { to: '/settings',   label: 'Settings',         icon: SlidersHorizontal, desc: 'Weight & party defaults' },
+export interface NavSection {
+  title: string
+  items: NavItem[]
+}
+
+export const NAV_SECTIONS: NavSection[] = [
+  {
+    title: 'CORE',
+    items: [
+      { to: '/', label: 'Dashboard', icon: LayoutDashboard, desc: 'Overview & business metrics' },
+    ],
+  },
+  {
+    title: 'OPERATIONS',
+    items: [
+      { to: '/receiving', label: 'Inward Receipts', icon: PackagePlus, desc: 'Raw yarn entry & tare weight' },
+      { to: '/dispatch',  label: 'Outward Dispatch', icon: Truck,       desc: 'Finished val deliveries & rola' },
+    ],
+  },
+  {
+    title: 'FINANCE',
+    items: [
+      { to: '/parties',   label: 'Party Directory',   icon: Users,        desc: 'Customer directory & balances' },
+      { to: '/payments',  label: 'Billing & Payments', icon: IndianRupee,  desc: 'Payment collections & dues' },
+      { to: '/expenses',  label: 'Operating Expenses', icon: Receipt,      desc: 'Daily business expenses' },
+    ],
+  },
+  {
+    title: 'SYSTEM',
+    items: [
+      { to: '/reports',   label: 'Reports & Analytics', icon: BarChart3,         desc: 'Financial summaries & ledgers' },
+      { to: '/settings',  label: 'System Settings',     icon: SlidersHorizontal, desc: 'Weight & party defaults' },
+    ],
+  },
 ]
+
+export const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap((sec) => sec.items)
 
 // 4 Primary Mobile Tabs + More — ordered by daily workflow
 const PRIMARY_MOBILE_ITEMS = [
   { to: '/',          label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/receiving', label: 'Received', icon: PackagePlus     },
-  { to: '/dispatch',  label: 'Dispatch',  icon: Truck           },
+  { to: '/receiving', label: 'Inward',    icon: PackagePlus     },
+  { to: '/dispatch',  label: 'Outward',   icon: Truck           },
   { to: '/expenses',  label: 'Expenses',  icon: Receipt         },
 ]
 
-// Secondary Modules shown inside "More" sheet — split by group
-const MORE_OPERATIONAL_ITEMS = [
-  { to: '/parties',    label: 'Parties',          icon: Users,             desc: 'Customer directory & balances' },
-
-  { to: '/payments',   label: 'Payments',         icon: IndianRupee,       desc: 'Party payment receipts' },
+// Secondary Modules shown inside "More" sheet — split by section
+const MORE_FINANCE_ITEMS = [
+  { to: '/parties',  label: 'Party Directory',   icon: Users,       desc: 'Customer directory & balances' },
+  { to: '/payments', label: 'Billing & Payments', icon: IndianRupee, desc: 'Payment collections & dues' },
 ]
-const MORE_ADMIN_ITEMS = [
-  { to: '/reports',    label: 'Reports',          icon: BarChart3,         desc: 'Summary reports & ledger' },
-  { to: '/settings',   label: 'Settings',         icon: SlidersHorizontal, desc: 'Weight & party defaults' },
+const MORE_SYSTEM_ITEMS = [
+  { to: '/reports',  label: 'Reports & Analytics', icon: BarChart3,         desc: 'Financial summaries & ledgers' },
+  { to: '/settings', label: 'System Settings',     icon: SlidersHorizontal, desc: 'Weight & party defaults' },
 ]
-const MORE_MOBILE_ITEMS = [...MORE_OPERATIONAL_ITEMS, ...MORE_ADMIN_ITEMS]
+const MORE_MOBILE_ITEMS = [...MORE_FINANCE_ITEMS, ...MORE_SYSTEM_ITEMS]
 
 
 
@@ -97,6 +135,38 @@ export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
   const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const [navCounts, setNavCounts] = useState<{ [key: string]: number }>({})
+
+  // Fetch live counts for navigation items
+  useEffect(() => {
+    let isMounted = true
+    async function loadCounts() {
+      try {
+        const [parties, receipts, dispatches, payments, expenses] = await Promise.all([
+          fetchParties(),
+          fetchReceipts(),
+          fetchDispatches(),
+          fetchPayments(),
+          fetchExpenses(),
+        ])
+        if (isMounted) {
+          setNavCounts({
+            '/parties': parties.length,
+            '/receiving': receipts.length,
+            '/dispatch': dispatches.length,
+            '/payments': payments.length,
+            '/expenses': expenses.length,
+          })
+        }
+      } catch (err) {
+        console.error('Failed to load nav counts:', err)
+      }
+    }
+    loadCounts()
+    return () => {
+      isMounted = false
+    }
+  }, [location.pathname])
 
   // Close more sheet automatically on navigation
   useEffect(() => {
@@ -133,49 +203,80 @@ export default function Layout() {
     >
       {/* ── Top Header ────────────────────────────────────────────── */}
       <header
-        className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2.5 shrink-0 gap-3 min-h-[56px] bg-white/80 backdrop-blur-xl border-b border-gray-100 shadow-[0_2px_20px_rgba(0,0,0,0.02)]"
+        className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2.5 shrink-0 gap-3 min-h-[58px] bg-white/90 backdrop-blur-xl border-b border-gray-100/90 shadow-[0_2px_20px_rgba(0,0,0,0.02)]"
       >
-        <div className="flex items-center min-w-0 shrink-0 cursor-pointer" onClick={() => navigate('/')}>
-          <Logo size={32} showText={true} />
+        <div className="flex items-center shrink-0 cursor-pointer pr-2" onClick={() => navigate('/')}>
+          <Logo size={34} showText={true} />
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0">
           <SyncIndicator />
-          <MonthSelector />
+          {location.pathname !== '/settings' && (
+            <>
+              <div className="h-4 w-px bg-gray-200/80 hidden sm:block" />
+              <MonthSelector />
+            </>
+          )}
         </div>
       </header>
 
       {/* ── Main Layout Body ───────────────────────────────────────── */}
-      <div className="flex flex-1" style={{ minHeight: 'calc(100dvh - 56px)' }}>
+      <div className="flex flex-1" style={{ minHeight: 'calc(100dvh - 58px)' }}>
         {/* ── Sidebar (desktop) ────────────────────────────────────── */}
         <nav
-          className="hidden sm:flex flex-col gap-1 w-52 shrink-0 p-3 sticky top-[56px] h-[calc(100vh-56px)] overflow-y-auto"
-          style={{ borderRight: '1px solid var(--color-border)' }}
+          className="hidden sm:flex flex-col w-72 shrink-0 px-3.5 py-4 sticky top-[58px] h-[calc(100vh-58px)] overflow-y-auto bg-white/70 backdrop-blur-md border-r border-slate-200/80 scrollbar-hide select-none"
           aria-label="Desktop Navigation"
         >
-          {ALL_NAV_ITEMS.map((t) => {
-            const Icon = t.icon
-            const active =
-              t.to === '/'
-                ? location.pathname === '/'
-                : location.pathname.startsWith(t.to)
+          <div className="flex flex-col gap-4">
+            {NAV_SECTIONS.map((section) => (
+              <div key={section.title} className="flex flex-col">
+                <div className="px-3 pb-1.5 text-[10px] font-black tracking-wider text-slate-400 uppercase select-none">
+                  {section.title}
+                </div>
+                <div className="flex flex-col gap-1">
+                  {section.items.map((t) => {
+                    const Icon = t.icon
+                    const active =
+                      t.to === '/'
+                        ? location.pathname === '/'
+                        : location.pathname.startsWith(t.to)
+                    const count = navCounts[t.to]
 
-            return (
-              <NavLink
-                key={t.to}
-                to={t.to}
-                end={t.to === '/'}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-md text-sm font-medium text-left transition-colors cursor-pointer min-h-[44px]"
-                style={{
-                  background: active ? 'var(--color-brass)' : 'transparent',
-                  color: active ? '#ffffff' : 'var(--color-ink)',
-                }}
-              >
-                <Icon size={17} strokeWidth={2} />
-                <span>{t.label}</span>
-              </NavLink>
-            )
-          })}
+                    return (
+                      <NavLink
+                        key={t.to}
+                        to={t.to}
+                        end={t.to === '/'}
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-left transition-colors duration-150 cursor-pointer min-h-[40px] group outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0 border-0 select-none ${
+                          active
+                            ? 'bg-slate-900 text-white font-medium rounded-lg'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 rounded-lg'
+                        }`}
+                      >
+                        <Icon
+                          size={17}
+                          strokeWidth={active ? 2.2 : 2}
+                          className={active ? 'text-white' : 'text-slate-400 group-hover:text-slate-700 transition-colors'}
+                        />
+                        <span className="flex-1 whitespace-nowrap">{t.label}</span>
+                        {count !== undefined && count > 0 && (
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold tabular-nums transition-colors shrink-0 ${
+                              active
+                                ? 'bg-slate-800 text-slate-300'
+                                : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200/80 group-hover:text-slate-800'
+                            }`}
+                          >
+                            {count}
+                          </span>
+                        )}
+                      </NavLink>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
         </nav>
 
         {/* ── Main content view ───────── */}
@@ -189,44 +290,44 @@ export default function Layout() {
         <div className="sm:hidden fixed inset-0 z-50 flex flex-col justify-end">
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
             onClick={() => setIsMoreOpen(false)}
             aria-label="Close menu backdrop"
           />
 
           {/* Sheet Container */}
           <div
-            className="relative z-10 w-full rounded-t-[32px] border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] p-5 pb-8 space-y-4 bg-white"
+            className="relative z-10 w-full rounded-t-[32px] border-t border-slate-100 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] p-5 pb-8 space-y-4 bg-white"
             style={{
               paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
             }}
           >
             {/* Sheet Header */}
-            <div className="flex items-center justify-between px-1 pb-3 border-b border-gray-100">
+            <div className="flex items-center justify-between px-1 pb-3 border-b border-slate-100">
               <div>
                 <h3
-                  className="text-xl font-black text-gray-900 tracking-tight"
+                  className="text-xl font-black text-slate-900 tracking-tight"
                 >
                   More Modules
                 </h3>
-                <p className="text-xs font-bold text-gray-400">
+                <p className="text-xs font-bold text-slate-400">
                   Additional operational tools
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsMoreOpen(false)}
-                className="p-2 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center cursor-pointer"
+                className="p-2 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center cursor-pointer"
                 aria-label="Close menu"
               >
                 <X size={22} strokeWidth={2.5} />
               </button>
             </div>
 
-            {/* Sheet Navigation List — Operational group */}
+            {/* Sheet Navigation List — Finance group */}
             <div className="space-y-1 pt-1">
-              <p className="text-[10px] font-extrabold uppercase tracking-widest px-1 pb-1 text-gray-400">Operational</p>
-              {MORE_OPERATIONAL_ITEMS.map((item) => {
+              <p className="text-[10px] font-extrabold uppercase tracking-widest px-1 pb-1 text-slate-400">Finance</p>
+              {MORE_FINANCE_ITEMS.map((item) => {
                 const isActive = location.pathname.startsWith(item.to)
                 const Icon = item.icon
                 return (
@@ -238,10 +339,10 @@ export default function Layout() {
                       setIsMoreOpen(false)
                     }}
                     className={[
-                      'w-full flex items-center justify-between px-4 py-3.5 rounded-[16px] text-left transition-all min-h-[56px] cursor-pointer group',
+                      'w-full flex items-center justify-between px-4 py-3.5 rounded-[16px] text-left transition-colors min-h-[56px] cursor-pointer group outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 border-0 select-none',
                       isActive
-                        ? 'bg-[#a57b3f]/10 shadow-sm'
-                        : 'hover:bg-gray-50',
+                        ? 'bg-slate-900 text-white'
+                        : 'hover:bg-slate-50',
                     ].join(' ')}
                   >
                     <div className="flex items-center gap-4">
@@ -249,17 +350,17 @@ export default function Layout() {
                         className={[
                           'w-11 h-11 rounded-[12px] flex items-center justify-center shrink-0 transition-colors',
                           isActive
-                            ? 'bg-[#a57b3f] text-white shadow-sm ring-2 ring-[#a57b3f]/20'
-                            : 'bg-gray-100 text-gray-400 group-hover:text-gray-600',
+                            ? 'bg-slate-800 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-400 group-hover:text-slate-600',
                         ].join(' ')}
                       >
                         <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
                       </div>
                       <div>
-                        <div className={`text-[15px] font-bold leading-tight ${isActive ? 'text-[#a57b3f]' : 'text-gray-900'}`}>
+                        <div className={`text-[15px] font-bold leading-tight ${isActive ? 'text-white' : 'text-slate-900'}`}>
                           {item.label}
                         </div>
-                        <div className="text-[12px] font-medium text-gray-400 leading-tight mt-1">
+                        <div className={`text-[12px] font-medium leading-tight mt-1 ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
                           {item.desc}
                         </div>
                       </div>
@@ -267,17 +368,17 @@ export default function Layout() {
                     <ChevronRight
                       size={18}
                       strokeWidth={2.5}
-                      className={isActive ? 'text-[#a57b3f]' : 'text-gray-300'}
+                      className={isActive ? 'text-slate-300' : 'text-slate-300'}
                     />
                   </button>
                 )
               })}
             </div>
 
-            {/* Reports & Admin group */}
-            <div className="space-y-1 pt-2 border-t border-gray-100">
-              <p className="text-[10px] font-extrabold uppercase tracking-widest px-1 pb-1 pt-1 text-gray-400">Reports & Admin</p>
-              {MORE_ADMIN_ITEMS.map((item) => {
+            {/* System group */}
+            <div className="space-y-1 pt-2 border-t border-slate-100">
+              <p className="text-[10px] font-extrabold uppercase tracking-widest px-1 pb-1 pt-1 text-slate-400">System</p>
+              {MORE_SYSTEM_ITEMS.map((item) => {
                 const isActive = location.pathname.startsWith(item.to)
                 const Icon = item.icon
                 return (
@@ -289,10 +390,10 @@ export default function Layout() {
                       setIsMoreOpen(false)
                     }}
                     className={[
-                      'w-full flex items-center justify-between px-4 py-3.5 rounded-[16px] text-left transition-all min-h-[56px] cursor-pointer group',
+                      'w-full flex items-center justify-between px-4 py-3.5 rounded-[16px] text-left transition-colors min-h-[56px] cursor-pointer group outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 border-0 select-none',
                       isActive
-                        ? 'bg-[#a57b3f]/10 shadow-sm'
-                        : 'hover:bg-gray-50',
+                        ? 'bg-slate-900 text-white'
+                        : 'hover:bg-slate-50',
                     ].join(' ')}
                   >
                     <div className="flex items-center gap-4">
@@ -300,17 +401,17 @@ export default function Layout() {
                         className={[
                           'w-11 h-11 rounded-[12px] flex items-center justify-center shrink-0 transition-colors',
                           isActive
-                            ? 'bg-[#a57b3f] text-white shadow-sm ring-2 ring-[#a57b3f]/20'
-                            : 'bg-gray-100 text-gray-400 group-hover:text-gray-600',
+                            ? 'bg-slate-800 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-400 group-hover:text-slate-600',
                         ].join(' ')}
                       >
                         <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
                       </div>
                       <div>
-                        <div className={`text-[15px] font-bold leading-tight ${isActive ? 'text-[#a57b3f]' : 'text-gray-900'}`}>
+                        <div className={`text-[15px] font-bold leading-tight ${isActive ? 'text-white' : 'text-slate-900'}`}>
                           {item.label}
                         </div>
-                        <div className="text-[12px] font-medium text-gray-400 leading-tight mt-1">
+                        <div className={`text-[12px] font-medium leading-tight mt-1 ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
                           {item.desc}
                         </div>
                       </div>
@@ -318,7 +419,7 @@ export default function Layout() {
                     <ChevronRight
                       size={18}
                       strokeWidth={2.5}
-                      className={isActive ? 'text-[#a57b3f]' : 'text-gray-300'}
+                      className={isActive ? 'text-slate-300' : 'text-slate-300'}
                     />
                   </button>
                 )
@@ -330,7 +431,7 @@ export default function Layout() {
 
       {/* ── Mobile 5-Item Bottom Bar ───────────────────────────────── */}
       <nav
-        className="sm:hidden fixed bottom-0 left-0 right-0 grid grid-cols-5 z-40 bg-white/85 backdrop-blur-2xl border-t border-gray-100 shadow-[0_-8px_30px_rgba(0,0,0,0.04)]"
+        className="sm:hidden fixed bottom-0 left-0 right-0 grid grid-cols-5 z-40 bg-white/90 backdrop-blur-2xl border-t border-slate-100 shadow-[0_-8px_30px_rgba(0,0,0,0.04)]"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
@@ -343,14 +444,14 @@ export default function Layout() {
               key={item.to}
               to={item.to}
               end={item.to === '/'}
-              className="flex flex-col items-center justify-center min-h-[56px] py-1 transition-all select-none cursor-pointer outline-none tap-highlight-transparent"
+              className="flex flex-col items-center justify-center min-h-[56px] py-1 transition-all select-none cursor-pointer outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 border-0 tap-highlight-transparent"
             >
               {({ isActive }) => (
                 <div className="flex flex-col items-center justify-center w-full relative pt-1">
-                  <div className={`relative flex items-center justify-center w-14 h-8 rounded-full transition-all duration-300 ${isActive ? 'bg-[#a57b3f]/10' : ''}`}>
-                    <Icon size={22} strokeWidth={isActive ? 2.5 : 2} className={`relative z-10 transition-colors ${isActive ? 'text-[#a57b3f]' : 'text-gray-400'}`} />
+                  <div className={`relative flex items-center justify-center w-14 h-8 rounded-full transition-all duration-300 ${isActive ? 'bg-slate-900 text-white' : ''}`}>
+                    <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={`relative z-10 transition-colors ${isActive ? 'text-white' : 'text-slate-400'}`} />
                   </div>
-                  <span className={`text-[10px] font-black tracking-tight leading-tight mt-1 text-center transition-colors duration-300 ${isActive ? 'text-[#a57b3f]' : 'text-gray-400'}`}>
+                  <span className={`text-[10px] font-bold tracking-tight leading-tight mt-1 text-center transition-colors duration-300 ${isActive ? 'text-slate-900 font-black' : 'text-slate-400'}`}>
                     {item.label}
                   </span>
                 </div>
@@ -363,15 +464,15 @@ export default function Layout() {
         <button
           type="button"
           onClick={() => setIsMoreOpen((prev) => !prev)}
-          className="flex flex-col items-center justify-center min-h-[56px] py-1 transition-all select-none cursor-pointer outline-none tap-highlight-transparent"
+          className="flex flex-col items-center justify-center min-h-[56px] py-1 transition-all select-none cursor-pointer outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 border-0 tap-highlight-transparent"
           aria-label="Open more modules menu"
           aria-expanded={isMoreOpen}
         >
           <div className="flex flex-col items-center justify-center w-full relative pt-1">
-            <div className={`relative flex items-center justify-center w-14 h-8 rounded-full transition-all duration-300 ${isMoreActive || isMoreOpen ? 'bg-[#a57b3f]/10' : ''}`}>
-              <MoreHorizontal size={22} strokeWidth={isMoreActive || isMoreOpen ? 2.5 : 2} className={`relative z-10 transition-colors ${isMoreActive || isMoreOpen ? 'text-[#a57b3f]' : 'text-gray-400'}`} />
+            <div className={`relative flex items-center justify-center w-14 h-8 rounded-full transition-all duration-300 ${isMoreActive || isMoreOpen ? 'bg-slate-900 text-white' : ''}`}>
+              <MoreHorizontal size={20} strokeWidth={isMoreActive || isMoreOpen ? 2.5 : 2} className={`relative z-10 transition-colors ${isMoreActive || isMoreOpen ? 'text-white' : 'text-slate-400'}`} />
             </div>
-            <span className={`text-[10px] font-black tracking-tight leading-tight mt-1 text-center transition-colors duration-300 ${isMoreActive || isMoreOpen ? 'text-[#a57b3f]' : 'text-gray-400'}`}>
+            <span className={`text-[10px] font-bold tracking-tight leading-tight mt-1 text-center transition-colors duration-300 ${isMoreActive || isMoreOpen ? 'text-slate-900 font-black' : 'text-slate-400'}`}>
               More
             </span>
           </div>

@@ -2,6 +2,7 @@ import { useState, Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { MonthProvider } from './context/MonthContext'
 import { SyncProvider } from './context/SyncContext'
+import { ToastProvider } from './context/ToastContext'
 import Layout from './components/layout/Layout'
 import { Lock } from 'lucide-react'
 
@@ -17,7 +18,7 @@ const Settings  = lazy(() => import('./pages/Settings'))
 export default function App() {
   const [pin, setPin] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
-  const isLocked = !sessionStorage.getItem('KASAB_MASTER_PIN')
+  const isLocked = !(sessionStorage.getItem('KASAB_MASTER_PIN') || localStorage.getItem('KASAB_MASTER_PIN'))
 
   if (isLocked) {
     return (
@@ -36,6 +37,7 @@ export default function App() {
               const masterPin = import.meta.env.VITE_MASTER_PIN || '7878' // Fallback for dev if env missing
               if (entered === masterPin) {
                 sessionStorage.setItem('KASAB_MASTER_PIN', entered)
+                localStorage.setItem('KASAB_MASTER_PIN', entered)
                 window.location.reload()
               } else if (entered) {
                 setErrorMsg('Incorrect PIN. Please try again.')
@@ -70,25 +72,27 @@ export default function App() {
     <BrowserRouter>
       <SyncProvider>
         <MonthProvider>
-          <Suspense fallback={
-            <div className="flex h-screen items-center justify-center bg-gray-50">
-              <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          }>
-            <Routes>
-              <Route element={<Layout />}>
-                <Route index                  element={<Dashboard />}  />
-                <Route path="parties"         element={<Parties />}    />
-                <Route path="receiving"       element={<Receiving />}  />
-                <Route path="dispatch"        element={<Dispatch />}   />
+          <ToastProvider>
+            <Suspense fallback={
+              <div className="flex h-screen items-center justify-center bg-gray-50">
+                <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            }>
+              <Routes>
+                <Route element={<Layout />}>
+                  <Route index                  element={<Dashboard />}  />
+                  <Route path="parties"         element={<Parties />}    />
+                  <Route path="receiving"       element={<Receiving />}  />
+                  <Route path="dispatch"        element={<Dispatch />}   />
 
-                <Route path="payments"        element={<Payments />}   />
-                <Route path="expenses"        element={<Expenses />}   />
-                <Route path="reports"         element={<Reports />}    />
-                <Route path="settings"        element={<Settings />}   />
-              </Route>
-            </Routes>
-          </Suspense>
+                  <Route path="payments"        element={<Payments />}   />
+                  <Route path="expenses"        element={<Expenses />}   />
+                  <Route path="reports"         element={<Reports />}    />
+                  <Route path="settings"        element={<Settings />}   />
+                </Route>
+              </Routes>
+            </Suspense>
+          </ToastProvider>
         </MonthProvider>
       </SyncProvider>
     </BrowserRouter>

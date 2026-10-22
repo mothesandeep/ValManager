@@ -1,26 +1,35 @@
-;
-
 interface LogoProps {
   size?: number;
   showText?: boolean;
   className?: string;
 }
 
-export function Logo({ size = 32, showText = true, className = '' }: LogoProps) {
+export function Logo({ size = 34, showText = true, className = '' }: LogoProps) {
   return (
-    <div className={`flex items-center gap-3 ${className}`}>
+    <div className={`flex items-center gap-2.5 shrink-0 select-none ${className}`}>
       <img
-        src="/logo.png"
-        alt="ValManager Logo"
+        src="/logo.svg"
+        alt=""
         width={size}
         height={size}
-        className="shrink-0 shadow-sm rounded-xl object-cover"
+        className="shrink-0 shadow-sm rounded-xl object-contain ring-1 ring-black/5"
         style={{ width: size, height: size }}
+        onError={(e) => {
+          // Fallback to png if svg fails
+          const target = e.currentTarget
+          if (!target.src.endsWith('logo.png')) {
+            target.src = '/logo.png'
+          }
+        }}
       />
       {showText && (
-        <div className="hidden xs:flex flex-col justify-center">
-          <span className="font-black text-[15px] sm:text-[17px] leading-tight text-gray-900 tracking-tight">ValManager</span>
-          <span className="text-[9px] sm:text-[10px] font-bold text-[#a57b3f] uppercase tracking-widest leading-none">Manager</span>
+        <div className="flex flex-col justify-center shrink-0">
+          <span className="font-black text-[16px] sm:text-[18px] leading-tight text-slate-900 tracking-tight whitespace-nowrap">
+            Val<span className="text-slate-900 font-extrabold">Manager</span>
+          </span>
+          <span className="text-[9.5px] font-bold text-gray-400 uppercase tracking-wider leading-none mt-0.5 whitespace-nowrap">
+            Jari Kasab & Val Portal
+          </span>
         </div>
       )}
     </div>

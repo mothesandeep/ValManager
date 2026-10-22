@@ -3,7 +3,7 @@ import type { Receipt, ReceiptWithParty } from '../../features/receiving/types'
 
 
 import { enqueueMutation, isNetworkError } from '../offline/sync'
-import { getPendingMutations, mergePendingMutations } from '../offline/db'
+import { getPendingMutations, mergePendingMutations, setCachedData, getCachedData } from '../offline/db'
 
 // ── Receipts ──────────────────────────────────────────────────────────────────
 
@@ -16,12 +16,10 @@ export async function fetchReceipts(): Promise<ReceiptWithParty[]> {
       .order('date', { ascending: false })
     if (error) throw error
     serverData = (data ?? []) as ReceiptWithParty[]
+    void setCachedData('cachedReceipts', serverData)
   } catch (err) {
-    if (!navigator.onLine) {
-      console.warn('Offline: Could not fetch receipts')
-    } else {
-      throw err
-    }
+    console.warn('[Kasab API] Could not fetch receipts from server, falling back to local cache:', err)
+    serverData = await getCachedData<ReceiptWithParty>('cachedReceipts')
   }
 
   const pending = await getPendingMutations<ReceiptWithParty>('receipts')

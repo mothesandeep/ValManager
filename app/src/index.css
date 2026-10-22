@@ -2,40 +2,45 @@
 @import "tailwindcss";
 
 @theme {
-  /* ── Kasab Val Manager Design Tokens ── */
-  --color-paper:        #F4F5F7;   /* App background - clean off-white */
-  --color-ink:          #1A1A1A;   /* Primary text - near black */
-  --color-ink-soft:     #666666;   /* Secondary text, labels, subtitles */
-  --color-brass:        #A6752B;   /* Primary brass accent */
-  --color-brass-dark:   #8A5F1F;   /* Dark brass border / active */
-  --color-brass-soft:   #F3EBE1;   /* Soft brass background */
-  --color-steel:        #5C5C5C;   /* Machine / neutral accent */
-  --color-positive:     #2F6B43;   /* Payments, profit, done */
-  --color-positive-bg:  #E8F2EB;   /* Positive background */
-  --color-positive-border: #CBE3D2;
-  --color-due:          #B33A3A;   /* Dues, expenses, pending */
-  --color-due-bg:       #F7E6E6;   /* Due background */
-  --color-negative:     #B33A3A;   /* Negative amounts, expenses */
-  --color-negative-bg:  #F7E6E6;   /* Negative background */
+  /* ── High-Contrast Modern B2B SaaS (Linear / Stripe style) Design Tokens ── */
+  --color-paper:        #F8FAFC;   /* App background - clean slate-50 */
+  --color-ink:          #0F172A;   /* Primary text - slate-900 */
+  --color-ink-soft:     #64748B;   /* Secondary text, labels, subtitles - slate-500 */
+  --color-brass:        #0F172A;   /* Solid Slate-900 */
+  --color-brass-dark:   #020617;   /* Slate-950 */
+  --color-brass-soft:   #F1F5F9;   /* Slate-100 */
+  --color-primary:      #0F172A;   /* Primary Solid Slate-900 */
+  --color-primary-dark: #020617;   /* Slate-950 */
+  --color-primary-soft: #F1F5F9;   /* Slate-100 */
+  --color-steel:        #64748B;   /* Slate-500 */
+  --color-positive:     #16A34A;   /* Emerald-600 */
+  --color-positive-bg:  #F0FDF4;   /* Emerald-50 */
+  --color-positive-border: #BBF7D0; /* Emerald-200 */
+  --color-due:          #E11D48;   /* Rose-600 */
+  --color-due-bg:       #FFF1F2;   /* Rose-50 */
+  --color-negative:     #E11D48;   /* Rose-600 */
+  --color-negative-bg:  #FFF1F2;   /* Rose-50 */
   --color-card:         #FFFFFF;   /* Cards, forms, tables */
-  --color-border:       #E5E5E5;   /* Dividers, borders */
-  --color-border-soft:  #F0F0F0;   /* Table header bg, soft dividers */
-  --color-overlay:      rgba(0, 0, 0, 0.4); /* Modal overlay */
+  --color-border:       #E2E8F0;   /* Slate-200 */
+  --color-border-soft:  #F1F5F9;   /* Slate-100 */
+  --color-overlay:      rgba(15, 23, 42, 0.45); /* Modal overlay */
 
   /* Typography */
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-display: 'Inter', system-ui, sans-serif;
   --font-body:    'Inter', system-ui, sans-serif;
 
   /* Shadows (Minimal & Premium) */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-2xs: 0 1px 2px rgba(0,0,0,0.03);
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
   --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.05);
   --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -4px rgba(0,0,0,0.05);
   
   /* Radius */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
 }
 
 /* ── Base ── */
@@ -66,6 +71,13 @@ body {
 /* Prevent accidental text selection on interactive elements */
 button, a, select, [role="button"] {
   user-select: none;
+}
+
+/* Navigation link focus and outline reset */
+nav a, nav a:focus, nav a:focus-visible, nav a:active {
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
 }
 
 h1, h2, h3, h4, h5, h6 {

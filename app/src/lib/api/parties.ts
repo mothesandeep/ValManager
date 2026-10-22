@@ -3,7 +3,7 @@ import type { Party } from '../../features/parties/types'
 
 
 import { enqueueMutation, isNetworkError } from '../offline/sync'
-import { getPendingMutations, mergePendingMutations } from '../offline/db'
+import { getPendingMutations, mergePendingMutations, setCachedData, getCachedData } from '../offline/db'
 
 // ── Parties ───────────────────────────────────────────────────────────────────
 
@@ -16,12 +16,10 @@ export async function fetchParties(): Promise<Party[]> {
       .order('name')
     if (error) throw error
     serverData = data ?? []
+    void setCachedData('cachedParties', serverData)
   } catch (err) {
-    if (!navigator.onLine) {
-      console.warn('Offline: Could not fetch parties from server, relying on cache/local')
-    } else {
-      throw err
-    }
+    console.warn('[Kasab API] Could not fetch parties from server, falling back to local cache:', err)
+    serverData = await getCachedData<Party>('cachedParties')
   }
 
   const pending = await getPendingMutations<Party>('parties')
