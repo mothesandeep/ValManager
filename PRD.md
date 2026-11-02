@@ -1,117 +1,112 @@
 # PRD — Kasab Val Manager
-**Version:** 1.0
+**Version:** 2.0  
 **Owner:** Sandeep (builder) · **Primary User:** Papa (sole operator, Jari Kasab Val job-work business, Surat)
 
 ---
 
 ## 1. Problem
 
-Papa runs a 1+ year old textile job-work business alone — receiving Kasab (metallic yarn) from parties, converting it to Val/Dori on a Ring Doubler machine, rewinding, dispatching, and getting paid on net weight. Every step today lives in **challans and memory**. Nothing is centralized:
+Papa runs a textile job-work business alone in Surat — receiving Kasab (metallic yarn) from parties, converting it to Val/Dori on a Ring Doubler machine, rewinding, dispatching, and collecting job-work payments based on net delivered weight. Historically, every step lived in **loose paper challans and mental memory**:
 
-- No single view of what's pending with which party (Rola to return, payment to collect).
-- No production or dispatch history beyond paper challans.
-- No expense or profitability tracking — profit is a guess, not a number.
-- **Single point of failure**: if challans are lost or damaged, that work history is gone.
+- No centralized record of outstanding party dues or pending empty Rola spools.
+- Risk of catastrophic record loss if physical challans were misplaced or damaged.
+- Inaccurate estimation of monthly profit and overhead expenses.
+- Mental math fatigue from calculating tare weights (grams to kilograms) across multiple bags.
 
 ## 2. Goal
 
-Give Papa one simple app, usable on his phone, that replaces memory + loose challans for:
-tracking parties, raw material received, production, dispatch, Rola return balance, payments, and expenses — with automatic numbers (net weight, balances, monthly profit) instead of manual math.
+Provide Papa with an offline-first, intuitive digital operating system on his Android phone and laptop that replaces paper challans and mental bookkeeping:
+1. **Accurate Math:** Automatic calculation of net weights, tare deductions, billing amounts, and running balances.
+2. **Offline-First Resilience:** Instant operation on-site without waiting for mobile internet, syncing automatically to Supabase.
+3. **Ironclad Data Protection:** Multi-layer backups via automated daily GitHub Actions database dumps, local snapshot rollback ("Oops" button), and JSON/CSV exports.
+4. **Zero-Friction Ergonomics:** Tailored for sole-operator speed with 1-click entry, thumb-zone controls, OLED dark mode, and "Galti-Proof" safety rails.
 
-**And:** every entry must also land in a Google Sheet automatically, so if the app's data is ever lost, the business records survive in a spreadsheet Papa (or Sandeep) can open independently.
+## 3. Scope & Evolved Requirements
 
-## 3. Non-Goals (v1 — anti-scope-creep)
+### In Scope (Delivered in Version 2.0)
+- **Parties & Khata (Ledger):** Centralized party directory, running balance tracking (receivable vs. collected), Rola spool inventory, and market alias support.
+- **Inward Receiving (Kasab):** Multi-bag batch challan entry, whole-number grams input, dynamic Rola tare deduction, Kasab color and twist logging.
+- **Outward Dispatch (Val & Kali):** Dual workflows for Val finished goods (with Bungari tare deduction and billing rate computation) and Kali (empty spool returns).
+- **AI Challan Scanner:** Mobile camera integration powered by Google Gemini vision (`@google/genai`) to parse paper challans into pre-filled drafts.
+- **Financials & Expenses:** Payment collection logging, month-over-month (MoM) expense categorization with trend indicators, and real-time P&L reporting.
+- **Challan Invoicing & Printing:** Formatted challan generation with isolated iframe printing and native PDF sharing.
+- **Security & PIN Lock:** 4-digit App Lock PIN with idle timeout and biometric device authentication.
+- **Three-Tier Deletion UX ("Galti-Proof"):** Swipe-to-Trash with 5-second Undo banner, Danger Zone with WAI-ARIA alertdialog, and 30-day Soft Delete Trash Bin.
+- **Automated Disaster Recovery:** Nightly database dumps via GitHub Actions (`daily-backup.yml`) and instant local snapshot rollback.
 
-Explicitly **out of scope** for v1. Do not build these unless Papa asks after using v1 for a while:
+### Explicit Non-Goals (Preserved for Future Releases)
+- Multi-tenant multi-organization logins (the app remains focused on Papa's single business unit).
+- GST / E-Way bill generation (job-work operations in this segment operate on delivery challans).
+- Automated SMS/WhatsApp marketing bulk messages to parties.
+- Barcode / QR label printing hardware integrations.
 
-- Multi-user accounts / employee logins (business is single-operator today).
-- Invoice/GST-compliant billing or e-invoicing.
-- SMS/WhatsApp auto-notifications to parties.
-- Predictive analytics, forecasting, or AI suggestions.
-- Barcode/QR scanning of Rola or Bungari.
-- Multi-language UI (v1 is English only, per decision).
-- A native iOS app (Android + mobile web only, since Papa's phone is Android).
+---
 
-If a feature isn't needed to replace "challan + memory" with "one accurate number," it waits for v2.
+## 4. User Personas
 
-## 4. Users
+| User | Role | Primary Device | Technical Comfort | Key Needs |
+|---|---|---|---|---|
+| **Papa** | Sole Operator | Android Phone (Capacitor APK) | Low | Large tap targets (≥44px), grams-first inputs without decimal points, instant offline responsiveness, thumb-zone controls, OLED dark mode. |
+| **Sandeep** | Builder / Auditor | Laptop / Desktop Web | High | Comprehensive P&L reports, automated database backups, test suite coverage (342 Vitest tests), desktop shortcuts (`Cmd+K`, `N+I`, etc.). |
 
-| User | Role | Device | Technical comfort |
+---
+
+## 5. Core User Stories & Workflows
+
+### Parties & Ledger (Khata)
+- As Papa, I can register a party once with their primary name, market aliases, phone, address, and default tare preferences (Rola and Bungri weights).
+- As Papa, I can open a party's Khata modal to inspect their complete transaction ledger: all receipts, dispatches, payments, and spool balances.
+
+### Inward Receiving (Kasab)
+- As Papa, when receiving a shipment of Kasab, I enter the party, date, challan number, and add line items for each bag (`Bag 1`, `Bag 2`).
+- As Papa, I enter gross weight in whole grams (e.g. `24500` g) and rola count; the app automatically deducts the party's spool tare and displays exact net kilograms (`23.250 kg`).
+- As Papa, I can snap a photo of the party's physical delivery challan or scan it using the AI Scanner to auto-fill the form.
+
+### Outward Dispatch (Val Delivery & Kali Returns)
+- As Papa, when delivering finished Val, I select "Val" mode, enter bore gross weight, and specify the Bungari cone count. The app automatically subtracts cone tare (70g each) and computes net Val weight.
+- As Papa, if a rate per kg is specified, the app calculates the total billing amount instantly.
+- As Papa, when returning empty spools to a party, I select "Kali" mode to log spool counts without triggering billing deductions.
+
+### Expenses & Financial Reporting
+- As Papa, I can log operational expenses (Rent, Electricity, Maintenance, Oil, Transport, Consumables) in seconds.
+- As Sandeep or Papa, I can view monthly P&L cards: Gross Billed, Total Expenses, and Net Operating Margin with MoM percentage changes.
+
+### Disaster Recovery & Safe Deletion
+- As Papa, if I accidentally delete a record on my phone, I can tap "Undo" on the 5-second banner to restore it immediately, or visit the Trash Bin within 30 days.
+- As Sandeep, I know that all records are backed up automatically to GitHub every night and can be rolled back in one click using the "Oops" snapshot button.
+
+---
+
+## 6. Functional Specifications Matrix
+
+| Module | Key Fields | Auto-Calculations | Safeguards & Validations |
 |---|---|---|---|
-| Papa | Sole daily user — enters every transaction | Android phone (primary), maybe a shared computer | Low — needs large buttons, few free-text fields, dropdowns over typing |
-| Sandeep | Builder, occasional data auditor | Laptop | High |
+| **Parties** | Name, Aliases, Phone, Address, Default Rola/Bungri Tare | Net outstanding balance, Pending Rola spool count | Unique name validation, deletion prevention if linked records exist |
+| **Inward** | Party, Date, Challan No, Kasab Color, Twist, Bags (Gross g, Rola pcs) | Net Kasab kg per bag, Total Batch Gross/Net kg, Spool inventory increment | Duplicate challan warnings, mandatory gross > tare, blur validation |
+| **Outward** | Party, Date, Challan No, Mode (Val/Kali), Bags (Bore Gross g, Bungari pcs), Rate/kg | Net Val kg, Bungari tare deduction, Total Billing Amount, Spool inventory decrement | Mode-specific field validation, positive rate check |
+| **Payments** | Party, Date, Amount, Payment Method, Reference/Note | Party Khata balance decrement | Positive amount requirement, instant ledger update |
+| **Expenses** | Date, Category, Amount, Note | Monthly expense category totals, MoM difference percentage | Category selection validation |
+| **Reports** | Month Selector, Custom Date Range | Total Received Kasab, Total Dispatched Val, Revenue, Expenses, Net Profit | Historical monthly comparison |
+| **Settings** | Global Rola Tare (125g), Bungri Tare (70g), Security PIN, Theme | Real-time tare prefill updates across forms | PIN confirmation, password-less biometric prompt |
 
-## 5. Core User Stories
-
-### Parties
-- As Papa, I can add a party once (name, phone, address) and reuse it for every future transaction, so I never retype it.
-- As Papa, I can see, per party, at a glance: Rola pending with me, and money they owe me.
-
-### Raw Material Receiving
-- As Papa, when I pick up Kasab from a party, I enter gross weight and tare (Rola) weight, and the app calculates net weight — I never do this subtraction by hand.
-- As Papa, I record the color type, challan number, and Rola count so the paper challan and the app always match.
-
-### Production
-- As Papa, I start a production order from a specific receiving entry, set cord count and S/Z twist type, and mark it Pending → In Progress → Done.
-- As Papa, I can log waste per order so I know which orders run heavy waste.
-
-### Dispatch
-- As Papa, when I deliver finished Val, I enter bore gross weight and Bungari count; the app deducts Bungari tare weight (~70g each) automatically to give net Val weight.
-- As Papa, if I know the rate per kg, the app calculates the amount owed to me — I don't do that math either.
-
-### Rola Tracking
-- As Papa, I can see, per party, how many Rola I've received vs. returned, and how many are still pending with me — since Rola belongs to the party, not to me.
-
-### Payments
-- As Papa, every dispatch with an amount automatically becomes something a party owes me; when they pay (in full or part), I log it and the balance updates itself.
-- As Papa, I can see who owes me the most, so I know who to follow up with first.
-
-### Expenses
-- As Papa, I log rent, electricity, transport, machine oil, repairs, and consumables as they happen, tagged by category.
-
-### Reports
-- As Papa (or Sandeep reviewing with me), I can see this month's Kasab received, Val dispatched, revenue billed, expenses, and estimated profit — one screen, no manual addition.
-- As Papa, I can see party-wise profitability and who has the highest pending balance.
-
-### Backup (new requirement)
-- As Papa, every time I add or edit anything, it should also be saved to a Google Sheet in the background, so that even if my phone breaks or the app data is wiped, the numbers still exist somewhere I (or Sandeep) can open in Excel/Google Sheets.
-- As Sandeep, I want the Sheet to mirror the app's tables (one tab per module) so I can audit or recover data without reverse-engineering anything.
-
-## 6. Functional Requirements
-
-| Module | Required fields | Auto-calculated |
-|---|---|---|
-| Parties | Name*, phone, address, notes | Rola pending, balance due (from other modules) |
-| Receiving | Party*, date, color, gross weight*, tare weight, challan no., Rola count | Net weight |
-| Production | Receipt link*, cord count, S/Z type, waste, status | — |
-| Dispatch | Party*, date, Bungari count, bore gross weight*, rate/kg (optional) | Net Val weight, amount (if rate given) |
-| Rola returns | Party*, date, Rola count returned | Running balance (received − returned) |
-| Payments | Party*, date, amount* | Running balance (receivable − received) |
-| Expenses | Date, category*, amount*, note | Monthly totals by category |
-| Reports | — | Monthly aggregates, party-wise profitability, top dues |
-
-`*` = required field.
+---
 
 ## 7. Non-Functional Requirements
 
-- **Works offline-first**: entries queue locally and sync (to DB + Sheet) when internet returns — Papa's phone signal isn't always reliable mid-pickup.
-- **Fast data entry**: every screen should be completable in under 6 taps/fields for a routine entry.
-- **No data loss**: local save happens before any network call; Google Sheets backup is a second layer, not the primary store.
-- **Runs on a low/mid-range Android phone** without lag.
-- **Installable**: home-screen icon (PWA) and/or a packaged Android APK, so it feels like "an app," not a website Papa has to search for.
+- **Offline-First:** All mutations commit to local IndexedDB (Dexie.js) instantly. The app never blocks UI interactions on network requests.
+- **Zero-Friction Speed:** Core operational flows complete in under 5 taps. Number inputs use `inputMode="numeric"` to pop the native numeric keyboard.
+- **Accurate Columnar Math:** All weights, balances, and currency figures utilize `Inter tabular-nums` to guarantee vertical decimal alignment.
+- **High-Contrast Dark Mode:** Full OLED Dark Mode (`#020617` background) with pre-render FOUC prevention for dim workshop environments.
+- **Touch Ergonomics:** All touch targets meet or exceed Android 44×44dp guidelines. Primary creation actions reside in the thumb zone (SpeedDial FAB).
 
-## 8. Success Criteria
+---
 
-The app is working if, three months in:
+## 8. Resolved Architecture & Business Decisions
 
-1. Papa has stopped writing job-work details on paper for his own tracking (challans to parties still happen — that's separate).
-2. Every rupee owed to Papa is visible in the app without him having to recall it.
-3. The Google Sheet backup has a row for every entry made in the app — spot-checked monthly.
-4. Papa can, unassisted, add a receiving entry and a dispatch entry.
-5. Monthly profit number in Reports is trusted enough that Papa references it without re-checking by hand.
-
-## 9. Open Questions (resolve before/at Phase 1)
-
-- Does Papa want a login/PIN at all, or should the app just open (single device, single user)?
-- Should Bore weight / Bungari weight defaults (70g) be editable per party, in case some parties use different Bungari?
-- Rate per kg — is it the same for all parties/colors, or does Papa negotiate per party? (Affects whether "rate" belongs on the party profile or per dispatch — currently modeled per dispatch.)
+| Question / Area | Initial PRD Hypothesis | Resolved Final Implementation |
+|---|---|---|
+| **App Authentication** | Unresolved (No gate vs PIN) | **Resolved:** Built-in 4-digit App Lock PIN with biometric unlock and configurable auto-lock timeout. |
+| **Tare Weights** | Fixed 70g Bungari / 200g Rola | **Resolved:** Configurable global defaults (70g Bungri, 125g Rola) with custom overrides configurable per party. |
+| **Rate per Kg** | Hardcoded per dispatch | **Resolved:** Party profiles store default job-work rates, automatically prefilled on Outward dispatches with inline override support. |
+| **Challan Photos** | Excluded | **Resolved:** Direct camera capture with image compression and Supabase storage bucket integration. |
+| **Backup Storage** | Google Sheets v4 via Edge Function | **Resolved:** Upgraded to automated GitHub Actions daily PostgreSQL backups, local snapshot rollback, and JSON/CSV exports. |

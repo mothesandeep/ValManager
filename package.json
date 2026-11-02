@@ -1,0 +1,14 @@
+{
+  "name": "kasab-val-manager-root",
+  "private": true,
+  "scripts": {
+    "build:apk": "cd app && npm run build:apk",
+    "build:apk:release": "cd app && npm run build:apk:release",
+    "build": "cd app && npm run build",
+    "cap:sync": "cd app && npm run cap:sync",
+    "test": "cd app && npm test",
+    "backup:db": "node scripts/backup-db.mjs",
+    "restore:db": "node scripts/restore-db.mjs"
+  }
+}
+

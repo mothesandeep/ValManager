@@ -1,156 +1,193 @@
 # Architecture — Kasab Val Manager
-**Version:** 1.0
+**Version:** 2.0  
+**Updated:** November 2026
 
 ---
 
-## 1. Stack Overview
+## 1. High-Level Technology Stack
 
-| Layer | Choice | Why |
+| Layer | Technology | Rationale & Responsibility |
 |---|---|---|
-| Frontend | React (Vite) + Tailwind, installed as a PWA | Fast, matches your existing React comfort, installable on Papa's phone home screen without app-store friction |
-| Mobile packaging | Capacitor wrapping the same React app → Android APK | Same pattern you're already using for CalistheniX — one codebase, two distribution forms |
-| Primary database | Supabase (Postgres + Auth + Realtime) | Managed, no self-hosting, direct client access with row-level security, realtime sync if needed later — same direction you're already moving CalistheniX toward |
-| Backup store | Google Sheets (via Google Sheets API v4) | Human-readable, opens in Excel, survives independently of the app/DB — exactly what Papa needs as a safety net |
-| Backup trigger | Supabase Edge Function (Deno) triggered on DB write via Postgres trigger/webhook | Keeps backup logic server-side and automatic — Papa never has to "remember to back up" |
-| Auth | Supabase Auth, single PIN-based login (or none, if Papa's phone is not shared — see PRD open question) | Business has one operator; auth exists mainly to protect the Supabase project, not to gate multiple users |
-| Hosting | Vercel or Netlify (frontend) + Supabase (backend) | Free tier covers this scale easily |
+| **Frontend Framework** | React 19 + TypeScript | Strict type safety, modern concurrent features, component modularity. |
+| **Bundler & Tooling** | Vite 8 + Rolldown | High-speed local development, tree-shaking, production asset compression. |
+| **Styling & Design** | Tailwind CSS v4 | Zero-runtime CSS, native CSS variable support, dark mode tokens. |
+| **Mobile Packaging** | Capacitor 8 (Android) | Wraps the single web codebase into a high-performance native Android APK (`Kasab-Val-Manager.apk`). Interfaces with native camera, haptic engine, and status bar. |
+| **Offline Cache & Outbox** | Dexie.js 4 (IndexedDB) | Reactive local client database for offline-first operation. Guarantees instantaneous mutation execution with optimistic UI rendering. |
+| **Primary Cloud Database** | Supabase (PostgreSQL 15) | Relational database source of truth. Protected by Row-Level Security (RLS) policies and automated timestamp tracking. |
+| **Object Storage** | Supabase Storage (`challan-images`) | Secure cloud bucket for physical delivery challan photographs. |
+| **AI Vision Scanner** | Google GenAI SDK (`@google/genai`) | Gemini Flash vision model parses raw challan images to extract party names, line item weights, and spool counts. |
+| **Automated Backups** | GitHub Actions + Node.js Scripts | Nightly automated database dumps (`daily-backup.yml`) paired with local CLI snapshot tools (`backup-db.mjs`, `restore-db.mjs`). |
+| **Testing** | Vitest 4 | Comprehensive unit, integration, and UI ergonomics test suite (342 tests across 35 files). |
 
-## 2. System Diagram
+---
+
+## 2. System Architecture Diagram
 
 ```
-┌─────────────────────────┐
-│   React PWA (phone)     │
-│  ┌────────────────────┐ │
-│  │ Local cache/queue   │ │   ← writes land here FIRST (offline-safe)
-│  │ (IndexedDB)          │ │
-│  └─────────┬────────────┘ │
-└────────────┼───────────────┘
-             │ sync when online
-             ▼
-   ┌───────────────────┐
-   │   Supabase (DB)    │  ← source of truth
-   │  Postgres tables   │
-   └─────────┬──────────┘
-             │ on INSERT/UPDATE (DB trigger → webhook)
-             ▼
-   ┌───────────────────────────┐
-   │  Supabase Edge Function    │
-   │  "sync-to-sheets"           │
-   └─────────┬───────────────────┘
-             │ Google Sheets API v4 (service account)
-             ▼
-   ┌───────────────────────────┐
-   │   Google Sheet             │
-   │  One tab per table          │  ← human-readable backup
-   │  (Parties, Receiving, ...)  │
-   └───────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                   Client Application (Web & Android APK)               │
+│                                                                        │
+│  ┌───────────────────────┐   ┌───────────────────┐   ┌──────────────┐  │
+│  │   UI Components &     │   │   AppLockContext  │   │  Gemini AI   │  │
+│  │   Feature Modules     │   │   (PIN / Biometric│   │  Vision OCR  │  │
+│  └───────────┬───────────┘   └───────────────────┘   └───────┬──────┘  │
+│              │                                               │         │
+│              ▼ Writes land locally FIRST                     │ Parses  │
+│  ┌────────────────────────────────────────────────────────┐  │ image   │
+│  │           Dexie.js (IndexedDB Local Outbox)            │  │ draft   │
+│  │  - Optimistic UI Updates                               │  │         │
+│  │  - Offline Mutation Queue (Create, Update, Delete)     │  │         │
+│  │  - Last-Write-Wins (LWW) conflict engine               │  │         │
+│  └───────────────────────────┬────────────────────────────┘  │         │
+└──────────────────────────────┼───────────────────────────────┼─────────┘
+                               │ Background sync               │
+                               │ when online                   │
+                               ▼                               ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                     Supabase Cloud Infrastructure                      │
+│                                                                        │
+│  ┌──────────────────────────────┐     ┌─────────────────────────────┐  │
+│  │   PostgreSQL 15 Relational   │     │      Supabase Storage       │  │
+│  │   - Row-Level Security (RLS) │     │      "challan-images"       │  │
+│  │   - Strict API Protection    │     │      Compressed photos      │  │
+│  │   - `updated_at` LWW engine  │     └─────────────────────────────┘  │
+│  └──────────────┬───────────────┘                                      │
+└─────────────────┼──────────────────────────────────────────────────────┘
+                  │
+                  │ Scheduled nightly trigger
+                  ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│              Disaster Recovery & Redundant Backup Engine               │
+│                                                                        │
+│  ┌──────────────────────────────┐     ┌─────────────────────────────┐  │
+│  │   GitHub Actions Workflow    │     │    Local Admin Scripts      │  │
+│  │   (`.github/workflows/       │     │    (`backup-db.mjs`,        │  │
+│  │     daily-backup.yml`)       │     │     `restore-db.mjs`)       │  │
+│  └──────────────────────────────┘     └─────────────────────────────┘  │
+│  ┌──────────────────────────────┐     ┌─────────────────────────────┐  │
+│  │   In-App "Oops" Rollback     │     │   30-Day Soft Delete        │  │
+│  │   Emergency local snapshot   │     │   Trash Bin Service         │  │
+│  └──────────────────────────────┘     └─────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-## 3. Data Flow (a single entry, end to end)
+---
 
-1. Papa fills the "New Receipt" form → app writes to local IndexedDB immediately, form closes instantly (no spinner wait).
-2. If online: app pushes the row to Supabase (`receipts` table) in the background.
-3. If offline: row stays queued; a small "X unsynced" indicator shows; syncs automatically on reconnect.
-4. Once the row lands in Supabase, a Postgres trigger fires a webhook to the `sync-to-sheets` Edge Function.
-5. The Edge Function appends/updates the matching row in the `Receiving` tab of the Google Sheet, keyed by the record's UUID (so re-syncs **update** the existing row instead of duplicating it).
-6. If the Sheets API call fails (rate limit, network), the function retries with backoff and logs the failure to a `sync_failures` table — so backup gaps are visible, not silent.
+## 3. End-to-End Data Flow
 
-## 4. Database Schema (Supabase / Postgres)
+1. **Local Mutation:** When the user records a new Inward receipt, Outward dispatch, or Payment, the payload is validated via Zod and written immediately to Dexie.js (IndexedDB).
+2. **Instant UI Response:** The form closes and the UI updates optimistically with zero network latency or spinner delay.
+3. **Network Synchronization:**
+   - **Online:** The sync manager flushes pending queue mutations to Supabase via REST/PostgREST.
+   - **Offline:** Mutations remain buffered in the outbox. The header pill reflects the offline state and pending count (e.g. `Offline (3 pending)`).
+4. **Collision Handling (LWW):** Updates carry ISO 8601 timestamps (`updated_at`). The Supabase Postgres database applies Last-Write-Wins to resolve multi-client edits idempotently.
+5. **Nightly Redundancy:** GitHub Actions executes a scheduled workflow that dumps all tables to encrypted JSON snapshots in the git repository, alerting on failures.
+
+---
+
+## 4. PostgreSQL Database Schema
 
 ```sql
--- parties
-id            uuid primary key default gen_random_uuid()
-name          text not null
-phone         text
-address       text
-notes         text
-created_at    timestamptz default now()
+-- 1. Parties Directory & Weight Preferences
+CREATE TABLE parties (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL UNIQUE,
+    phone TEXT,
+    address TEXT,
+    notes TEXT,
+    default_rate NUMERIC(10, 2) DEFAULT 0,
+    default_rola_weight_g INT DEFAULT 125,
+    default_bungari_weight_g INT DEFAULT 70,
+    aliases TEXT[] DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    deleted_at TIMESTAMPTZ
+);
 
--- receipts (raw material receiving)
-id            uuid primary key default gen_random_uuid()
-party_id      uuid references parties(id)
-date          date not null
-color         text            -- Gold / Silver / Pelmet / Water / Antique
-gross_weight  numeric not null
-tare_weight   numeric default 0
-net_weight    numeric generated always as (gross_weight - tare_weight) stored
-challan_no    text
-rola_count    int default 0
-created_at    timestamptz default now()
+-- 2. Inward Receipts (Kasab Raw Material)
+CREATE TABLE receipts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    party_id UUID REFERENCES parties(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    color TEXT,                               -- Gold, Silver, Pelmet, Water, Antique
+    twist_type TEXT,                          -- S, Z
+    gross_weight NUMERIC(12, 3) NOT NULL,     -- In Kilograms (stored to 3 decimals)
+    tare_weight NUMERIC(12, 3) DEFAULT 0,     -- Calculated rola tare in Kilograms
+    net_weight NUMERIC(12, 3) NOT NULL,       -- gross_weight - tare_weight
+    challan_no TEXT,
+    rola_count INT DEFAULT 0,
+    photo_url TEXT,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    deleted_at TIMESTAMPTZ
+);
 
--- production_orders
-id            uuid primary key default gen_random_uuid()
-receipt_id    uuid references receipts(id)
-cord_count    int              -- 4/8/10/12/14/18
-twist_type    text             -- 'S' or 'Z'
-waste         numeric default 0
-status        text default 'Pending'   -- Pending / In Progress / Done
-created_at    timestamptz default now()
+-- 3. Outward Dispatches (Val Finished Goods & Kali Returns)
+CREATE TABLE dispatches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    party_id UUID REFERENCES parties(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    dispatch_type TEXT DEFAULT 'VAL',         -- 'VAL' (Delivery) or 'KALI' (Spool Return)
+    challan_no TEXT,
+    bore_gross_weight NUMERIC(12, 3) NOT NULL,
+    bungari_count INT DEFAULT 0,
+    bungari_weight_g INT DEFAULT 70,
+    net_val_weight NUMERIC(12, 3) NOT NULL,
+    rate_per_kg NUMERIC(10, 2) DEFAULT 0,
+    amount NUMERIC(12, 2) DEFAULT 0,
+    rola_count INT DEFAULT 0,                 -- Relevant for Kali spool returns
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    deleted_at TIMESTAMPTZ
+);
 
--- dispatches
-id                uuid primary key default gen_random_uuid()
-party_id          uuid references parties(id)
-date              date not null
-bungari_count     int default 0
-bore_gross_weight numeric not null
-net_val_weight    numeric        -- computed at write time: bore_gross_weight - (bungari_count * 0.07)
-rate_per_kg       numeric
-amount            numeric        -- computed if rate_per_kg present, else manual
-created_at        timestamptz default now()
+-- 4. Payments Collection (Khata Credit)
+CREATE TABLE payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    party_id UUID REFERENCES parties(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    amount NUMERIC(12, 2) NOT NULL,
+    payment_method TEXT DEFAULT 'CASH',       -- CASH, BANK_TRANSFER, UPI, CHEQUE
+    note TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    deleted_at TIMESTAMPTZ
+);
 
--- rola_returns
-id            uuid primary key default gen_random_uuid()
-party_id      uuid references parties(id)
-date          date not null
-rola_count    int not null
-created_at    timestamptz default now()
-
--- payments
-id            uuid primary key default gen_random_uuid()
-party_id      uuid references parties(id)
-date          date not null
-amount        numeric not null
-note          text
-created_at    timestamptz default now()
-
--- expenses
-id            uuid primary key default gen_random_uuid()
-date          date not null
-category      text not null    -- Rent / Electricity / Transport / ... / Other
-amount        numeric not null
-note          text
-created_at    timestamptz default now()
-
--- sync_failures (backup health)
-id            uuid primary key default gen_random_uuid()
-table_name    text
-record_id     uuid
-error         text
-attempted_at  timestamptz default now()
+-- 5. Operating Expenses
+CREATE TABLE expenses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    date DATE NOT NULL,
+    category TEXT NOT NULL,                   -- Rent, Electricity, Transport, Oil, Maintenance, etc.
+    amount NUMERIC(12, 2) NOT NULL,
+    note TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    deleted_at TIMESTAMPTZ
+);
 ```
 
-All derived numbers Papa sees (party balance, Rola pending, monthly profit) are **computed in the frontend from these raw tables** — nothing is double-stored, so the Sheet and the app can never disagree about a stored total, only about which raw rows have synced yet.
+---
 
-## 5. Google Sheets Backup — Design Details
+## 5. Security & Access Control
 
-- **One Google Sheet, one tab per table** (`Parties`, `Receiving`, `Production`, `Dispatch`, `RolaReturns`, `Payments`, `Expenses`) — mirrors the schema 1:1, so recovery means "open the Sheet, you have the raw data."
-- **Service account** (Google Cloud) with edit access to the Sheet — no personal Google login required, no OAuth token to babysit.
-- **Upsert by UUID**: first column in every tab is the record's `id`. Sync function looks up the row by ID; updates it if found, appends if not. This makes the sync **idempotent** — safe to retry without creating duplicate rows.
-- **Trigger, not schedule**: sync fires on every write (near-real-time), not on a nightly batch — so backup lag is seconds, not a day's worth of lost work in the worst case.
-- **Fallback schedule**: in addition, a daily scheduled Edge Function does a full reconciliation pass (compare row counts per table between Supabase and the Sheet) and re-pushes anything missing — covers the case where a webhook silently failed.
-- **Read-only for Papa**: the Sheet is a safety net, not a second place to edit data — editing only happens in the app, to avoid the two sources drifting apart.
+1. **Row-Level Security (RLS):** All tables have RLS enabled with explicit policies. Direct access with the public anon key is restricted to valid operations, shielding backend tables from unauthorized tampering.
+2. **Zero Leaked Secrets:** Frontend builds and APK bundles contain only the public `anon` key. All administrative tokens, database passwords, and service-role secrets reside in protected environment variables.
+3. **Application Lock:** Client-side 4-digit PIN authentication (`AppLockContext`) intercepts application startup and background-resume events, offering optional biometric authentication via the native device secure enclave.
 
-## 6. Offline Handling
+---
 
-- IndexedDB (via a small wrapper, e.g. Dexie.js) holds an outbox of unsynced writes.
-- A visible, unobtrusive sync-status indicator (e.g. "All synced" / "3 pending") sits in the header — Papa doesn't need to understand sync, just see a checkmark.
-- Conflict handling is not a concern in v1: single user, single device at a time, so last-write-wins is safe.
+## 6. Disaster Recovery & Data Integrity
 
-## 7. Security Notes
-
-- Supabase Row-Level Security scoped to a single business/user ID — even though it's one user, this prevents the anon key (embedded in the frontend) from being usable to read/write arbitrary data if leaked.
-- Google service account key lives only in the Supabase Edge Function's environment secrets — never shipped to the frontend bundle.
-
-## 8. What Changes From the Current Prototype
-
-The artifact you're using today (`kasab-val-manager.jsx`) uses the chat environment's own `window.storage` — that only works inside a Claude conversation and isn't installable on Papa's phone. This architecture describes the **real, standalone app** version: same screens and calculations, but backed by Supabase instead of `window.storage`, and with the Google Sheets backup layer added. The UI/UX and design system (see `design.md`) carry over unchanged.
+1. **Daily Automated Backup (`.github/workflows/daily-backup.yml`):**
+   - Scheduled via GitHub Actions cron to execute every night.
+   - Extracts all table records and outputs timestamped, encrypted JSON dumps to the repository's `backups/` directory.
+2. **Local Administrator Scripts:**
+   - `scripts/backup-db.mjs`: Node.js utility to generate immediate local snapshots on demand.
+   - `scripts/restore-db.mjs`: Verifies snapshot integrity and restores records to Supabase with transactional safeguards.
+3. **Three-Tier Deletion Architecture:**
+   - **Undo Banner:** Deleted items trigger a 5-second banner with an instant `[Undo]` button.
+   - **Soft Delete Retention:** Database records populate a `deleted_at` timestamp.
+   - **Trash Bin Service:** `trashBinService.ts` maintains records for 30 days in the client, enabling full restoration before permanent purge.

@@ -1,29 +1,68 @@
 # Contributing to Kasab Val Manager
 
-First off, thank you for considering contributing to Kasab Val Manager! It's people like you that make Kasab Val Manager such a great tool.
+Thank you for contributing to Kasab Val Manager! This guide outlines our development workflow, coding standards, and pull request process.
 
-## How to Contribute
+---
 
-### Reporting Bugs
-This section guides you through submitting a bug report for Kasab Val Manager. Following these guidelines helps maintainers and the community understand your report, reproduce the behavior, and find related reports.
-- Use the provided **Bug Report Template** when creating a new issue.
-- Explain the problem and include additional details to help maintainers reproduce the problem.
+## 🛠️ Getting Started
 
-### Suggesting Enhancements
-This section guides you through submitting an enhancement suggestion for Kasab Val Manager, including completely new features and minor improvements to existing functionality.
-- Use the provided **Feature Request Template** when creating a new issue.
-- Describe the current behavior and the behavior you expected to see.
+1. **Fork and Clone the Repository:**
+   ```bash
+   git clone https://github.com/mothesandeep/Kasab-Val-Manager.git
+   cd Kasab-Val-Manager
+   ```
+
+2. **Install Dependencies:**
+   ```bash
+   npm install --prefix app
+   ```
+
+3. **Configure Environment:**
+   Copy `app/.env.example` to `app/.env.local` and add your local Supabase credentials.
+
+4. **Start Development Server:**
+   ```bash
+   npm run dev --prefix app
+   ```
+
+---
+
+## 🧪 Testing & Quality Standards
+
+Before submitting changes, ensure all tests, typechecks, and linters pass without errors or warnings:
+
+```bash
+# 1. Run full Vitest suite (all 342 tests must pass)
+npm test --prefix app
+
+# 2. Run TypeScript build & Vite production bundle check
+npm run build --prefix app
+
+# 3. Run Oxlint code analysis
+npm run lint --prefix app
+```
+
+If your change adds new calculations, UI workflows, or API calls, you must include corresponding test suites under `app/src/tests/` or alongside the feature directory.
+
+---
+
+## 📐 Development Guidelines
+
+- **Architecture:** Keep feature-specific logic within `app/src/features/<feature_name>/`. Shared UI components belong in `app/src/components/common/`.
+- **Pure Calculations:** Tare weight formulas, billing amounts, and balances must be pure functions in calculation utilities.
+- **Design System:** Strictly follow the Blue SaaS 2.0 design tokens outlined in [`design.md`](design.md). Maintain 44×44px minimum tap targets and `tabular-nums` on all numbers.
+- **Rules Invariants:** Review [`rules.md`](rules.md) for strict coding conventions and [`agent.md`](agent.md) for agent operating guidelines.
+
+---
+
+## 📝 Commit & PR Guidelines
+
+### Commit Messages
+- Use clear, conventional commit prefixes: `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `test:`.
+- Use the imperative mood in the present tense (e.g., `feat: add party alias search index`).
+- Keep the summary line concise (under 72 characters).
 
 ### Pull Requests
-- Fill in the required template
-- Do not include issue numbers in the PR title
-- Document new code based on the Documentation Guidelines
-- End all files with a newline
-
-## Styleguides
-
-### Git Commit Messages
-- Use the present tense ("Add feature" not "Added feature")
-- Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
-- Limit the first line to 72 characters or less
-- Reference issues and pull requests liberally after the first line
+1. Fill out the [Pull Request Template](.github/PULL_REQUEST_TEMPLATE.md) completely.
+2. Ensure CI/CD workflows and automated test checks pass.
+3. Update relevant documentation (`memory.md`, `README.md`, etc.) if your change alters behaviors or configurations.

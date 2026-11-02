@@ -1,80 +1,104 @@
 # rules.md — Kasab Val Manager
 
-Concrete coding rules for this project. `agent.md` covers *how to work*; this file covers *how the code should look and behave*.
+**Purpose:** Concrete coding standards and architectural invariants for this codebase. Every contributor and AI agent must adhere to these rules.
 
 ---
 
-## 1. Stack Rules (do not substitute without updating architecture.md first)
+## 1. Technology Stack Invariants
 
-- Frontend: React + Vite + Tailwind CSS. No other CSS framework, no CSS-in-JS library.
-- State: React state/hooks for UI state. Server state goes through Supabase client, not a separate state-management library (Redux etc.) — the app isn't complex enough to need one.
-- Database: Supabase (Postgres). No direct SQLite/local DB as the source of truth — IndexedDB is a **sync queue only** (Phase 5+), never the primary store.
-- Icons: `lucide-react` only, for consistency with the existing prototype.
-- Mobile packaging: Capacitor. Do not introduce React Native or Flutter — that would mean rebuilding the UI from scratch for no benefit here.
+- **Frontend:** React 19 + Vite 8 + TypeScript + Tailwind CSS v4. No external UI component suites (no MUI, Chakra, AntD, or shadcn copy-paste libraries) — all UI atoms follow the custom Blue SaaS 2.0 design tokens.
+- **State Management:** React hooks and context (`DataContext`, `MonthContext`, `AppLockContext`, `SyncContext`). No Redux or heavy client state libraries.
+- **Local Persistence & Offline:** Dexie.js 4 (IndexedDB) acts as the local offline mutation queue and fast cache. Server mutations write to Dexie first with optimistic UI updates.
+- **Cloud Backend:** Supabase PostgreSQL 15 with Row-Level Security (RLS).
+- **Mobile Container:** Capacitor 8 for Android. Do not introduce Flutter or React Native.
+- **Icons:** `lucide-react` exclusively for iconography consistency.
 
-## 2. File & Folder Structure
+---
+
+## 2. Directory & Modular Feature Structure
+
+Code is organized by domain feature slices rather than technical layers:
 
 ```
-/src
-  /components      -- shared UI atoms (Button, Field, Table, KpiCard, etc.)
-  /modules
-    /parties
-    /receiving
-    /production
-    /dispatch
-    /rola
-    /payments
-    /expenses
-    /reports
-    /dashboard
-  /lib
-    supabaseClient.js
-    calculations.js   -- net weight, net Val weight, balances — pure functions, unit-testable
-    offlineQueue.js    -- Phase 5+
-  /styles
-    tokens.css        -- design tokens from design.md, as CSS variables
+app/src/
+├── app/                  # Application Shell, Router, Top-level providers
+├── components/
+│   ├── common/           # Shared atoms (Badge, Button, KpiCard, PullToRefresh)
+│   ├── feedback/         # ActionSheet, DestructiveConfirmDialog, DangerZone
+│   ├── layout/           # AppShell, BottomNavigation, SpeedDialFab, PageHeader
+│   ├── preview/          # ChallanPrintModal, iframe printing utility
+│   ├── security/         # SecurityLockScreen, PinKeypad
+│   └── sheets/           # BottomSheetModal drawers
+├── context/              # Global state contexts (AppLock, Data, Month, Theme, Sync)
+├── features/             # Feature domain modules
+│   ├── billing/          # Invoicing and delivery challans
+│   ├── dashboard/        # Executive overview and 1-tap entry
+│   ├── expenses/         # MoM categorized operating expenses
+│   ├── inward/           # Kasab raw material receiving, multi-bag batching
+│   ├── outward/          # Val delivery & Kali spool returns, billing math
+│   ├── parties/          # Directory, Party Khata ledger, tare preferences
+│   ├── reports/          # Monthly summaries, P&L, debtors
+│   ├── scanner/          # Gemini vision challan camera parser
+│   └── settings/         # System tare defaults, app lock, trash bin
+├── lib/
+│   ├── api/              # Supabase query functions (dispatch, receipts, parties, etc.)
+│   ├── offline/          # Dexie database schema and LWW sync engine
+│   └── validation/       # Zod schemas for all forms and models
+├── services/             # Domain services (aiScanner, autoBackup, appLock, trashBin)
+├── tests/                # Automated Vitest test suites
+└── utils/                # Pure mathematical calculations, formatters, haptics, deep links
 ```
 
-One module = one folder = its form + its table/list + its own small hooks. Don't scatter one module's logic across unrelated folders.
+---
 
-## 3. Calculation Rules
+## 3. Pure Mathematical Calculations
 
-All derived numbers must be **pure functions** in `lib/calculations.js`, not inlined in components and not duplicated between frontend and any backend function. Specifically:
+All business logic and tare calculations must remain **pure, side-effect-free functions** located in `src/utils/calculations.ts` or feature-specific calculation utilities with comprehensive test coverage:
 
-- `netWeight(gross, tare) = gross - tare`
-- `netValWeight(boreGross, bungariCount) = boreGross - (bungariCount * 0.07)`
-- `dispatchAmount(netValWeight, ratePerKg) = ratePerKg ? round(netValWeight * ratePerKg) : null`
-- `rolaPending(received, returned) = received - returned`
-- `partyBalance(totalDispatchValue, totalReceived) = totalDispatchValue - totalReceived`
+1. **Net Kasab Receiving Weight:**
+   $$\text{Net Weight (kg)} = \text{Gross (kg)} - \left(\frac{\text{Rola Count} \times \text{Per-Rola Grams}}{1000}\right)$$
+2. **Net Val Delivery Weight:**
+   $$\text{Net Val (kg)} = \text{Bore Gross (kg)} - \left(\frac{\text{Bungari Count} \times \text{Bungari Tare Grams}}{1000}\right)$$
+3. **Dispatch Billing Total:**
+   $$\text{Amount (₹)} = \text{round}(\text{Net Val Weight (kg)} \times \text{Rate per kg})$$
+4. **Party Khata Financial Balance:**
+   $$\text{Balance Due (₹)} = \sum \text{Dispatch Amounts} - \sum \text{Payments Received}$$
+5. **Rola Spool Inventory Balance:**
+   $$\text{Pending Spools} = \sum \text{Received Rola} - \sum \text{Returned Rola}$$
 
-If the Google Sheets backup (Phase 6) ever needs to recompute these independently, it must import/mirror these exact formulas — never re-derive them differently, or the app and the backup Sheet will silently disagree.
+---
 
-## 4. Data & Security Rules
+## 4. Offline Queue & Last-Write-Wins (LWW)
 
-- **Never** ship the Google service account key, or any Supabase service-role key, in frontend code or a public repo. Service-role/service-account credentials live only in Supabase Edge Function environment secrets.
-- The frontend uses only the Supabase **anon key**, scoped by Row-Level Security — never the service role key.
-- Every table write includes the record's own UUID (`gen_random_uuid()` server-side or generated client-side) — this UUID is the sync key used for Google Sheets upserts. Never rely on row order or auto-increment for sync matching.
-- Don't log full record contents (names, phone numbers, amounts) to any third-party analytics or error-tracking tool. Local console logs for debugging are fine; nothing business-sensitive leaves the app/Supabase/Sheet boundary.
+1. **Local-First Execution:** Every mutation (create, edit, delete) is written directly to IndexedDB via Dexie before firing any network requests.
+2. **Optimistic Rendering:** The UI reflects updates immediately without awaiting network confirmation or displaying blocking spinners.
+3. **Idempotent Synchronization:** Sync mutations carry client-generated UUIDs and ISO 8601 `updated_at` timestamps. Supabase uses Last-Write-Wins to prevent outdated mutations from overwriting newer changes.
+4. **Never Block Papa:** Network disconnection or intermittent factory connectivity must never prevent the user from completing an entry.
 
-## 5. Offline Queue Rules (Phase 5+)
+---
 
-- Every write goes to IndexedDB first, UI updates optimistically, sync to Supabase happens in background.
-- Sync must be **idempotent** — retrying a write that already succeeded must not create a duplicate row (match on UUID).
-- Never block the UI on network state. A slow/dead connection must never prevent Papa from completing a form.
+## 5. Security & Sensitive Information
 
-## 6. Error Handling
+1. **Credential Exposure:** Never commit Supabase service-role keys or database administrative passwords. Client bundles must only contain the public `anon` key.
+2. **Row-Level Security:** Every table in PostgreSQL must have RLS enabled with explicit restrictive policies.
+3. **App Lock Enclave:** The 4-digit security PIN is hashed client-side. Failed entry attempts enforce progressive timeouts.
+4. **Anonymized Logs:** Never emit customer names, telephone numbers, or financial amounts to third-party loggers or telemetry tools.
 
-- User-facing errors follow `design.md` §5 tone: state what happened, state what to do, never blame the user, never show a raw stack trace or technical error code to Papa.
-- Every `try/catch` around a Supabase or Sheets API call must have a real fallback (queue for retry, or a visible-but-calm status indicator) — never a silent `catch {}` that hides a lost write.
+---
 
-## 7. Naming & Style
+## 6. Three-Tier Deletion Guidelines ("Galti-Proof")
 
-- Variables and functions: `camelCase`. Components: `PascalCase`. Files matching a component: same `PascalCase` name.
-- No abbreviations that aren't already in the business brief's own vocabulary (`Val`, `Rola`, `Bungari`, `Kasab` are fine as-is; don't invent new shorthand).
-- Comments explain **why**, not what — the "what" should be clear from good naming. Reserve comments for business-rule context a future reader wouldn't otherwise know (e.g. *"// 0.07kg = standard Bungari tare weight, see architecture.md §4"*).
+Deleting records must strictly employ one of the three established patterns:
+1. **Tier 1 (Mobile Swipe):** For fast mobile list row deletion, use `SwipeableRow.tsx` with haptic feedback, a red background, and a 5-second `[Undo]` toast banner.
+2. **Tier 2 (Modal / Danger Zone):** For form edit views, place deletion in an isolated `DangerZone.tsx` container and trigger `DestructiveConfirmDialog.tsx` with initial focus locked to `Cancel`.
+3. **Tier 3 (Trash Bin Retention):** Incurred deletions must pass through `trashBinService.ts` with full payload preservation and 30-day recovery retention.
 
-## 8. What Not to Do
+---
 
-- Don't add a UI library (MUI, Chakra, shadcn, etc.) on top of Tailwind — the design system in `design.md` is custom and specific; a component library fights it.
-- Don't add authentication complexity beyond what `PRD.md` §9 resolves — no OAuth, no third-party login providers, unless that open question is explicitly answered otherwise.
-- Don't optimize prematurely — this app handles one small business's transaction volume (dozens of entries a week, not thousands). Simple, readable code beats clever, fast code here.
+## 7. Accessibility, Styling & Ergonomics
+
+1. **Touch Target Dimensions:** All interactive buttons, chips, table action icons, and form triggers must satisfy minimum dimensions of **44px × 44px**.
+2. **Tabular Numerics:** All currency figures, weights, counts, and dates must use `tabular-nums` (`font-variant-numeric: tabular-nums`) for column alignment.
+3. **Numeric Keyboards:** Numeric inputs must specify `inputMode="numeric"` or `type="text" inputMode="decimal"` to display the numeric keypad immediately on mobile devices.
+4. **Focus Outlines:** Desktop navigation must feature accessible focus outlines (`focus-visible:ring-2 focus-visible:ring-blue-500`).
+5. **Dark Mode Integrity:** Dark mode must use pure OLED black (`#020617` canvas, `#0F172A` cards) with pre-render FOUC prevention.

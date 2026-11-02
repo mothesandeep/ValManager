@@ -5,6 +5,9 @@ import type { Expense } from '../../features/expenses/types'
 import { enqueueMutation, isNetworkError } from '../offline/sync'
 import { getPendingMutations, mergePendingMutations, setCachedData, getCachedData } from '../offline/db'
 
+import { emitDataChange } from '../events'
+import { db } from '../offline/db'
+
 // ── Expenses ──────────────────────────────────────────────────────────────────
 
 export type ExpensePayload = Omit<Expense, 'id' | 'created_at'>
@@ -30,7 +33,11 @@ export async function fetchExpenses(): Promise<Expense[]> {
 
 export async function insertExpense(payload: ExpensePayload): Promise<void> {
   const id = crypto.randomUUID()
-  const expenseData = { ...payload, id, created_at: new Date().toISOString() }
+  const expenseData: Expense = { ...payload, id, created_at: new Date().toISOString() }
+
+  // Immediately mirror to local cache
+  void db.cachedExpenses.put(expenseData).catch(() => {})
+  emitDataChange('expenses', 'INSERT', id)
 
   if (!navigator.onLine) {
     await enqueueMutation('expenses', 'INSERT', id, expenseData)
@@ -49,10 +56,16 @@ export async function insertExpense(payload: ExpensePayload): Promise<void> {
   }
 }
 
+export const recordExpense = insertExpense
+
 export async function updateExpense(
   id: string,
   payload: ExpensePayload
 ): Promise<void> {
+  // Immediately mirror to local cache
+  void db.cachedExpenses.update(id, payload).catch(() => {})
+  emitDataChange('expenses', 'UPDATE', id)
+
   if (!navigator.onLine) {
     await enqueueMutation('expenses', 'UPDATE', id, payload)
     return
@@ -74,6 +87,10 @@ export async function updateExpense(
 }
 
 export async function deleteExpense(id: string): Promise<void> {
+  // Immediately prune from local cache
+  void db.cachedExpenses.delete(id).catch(() => {})
+  emitDataChange('expenses', 'DELETE', id)
+
   if (!navigator.onLine) {
     await enqueueMutation('expenses', 'DELETE', id, null)
     return

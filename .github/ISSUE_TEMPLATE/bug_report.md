@@ -1,32 +1,40 @@
 ---
-name: Bug report
-about: Create a report to help us improve
-title: ''
+name: Bug Report
+about: Report a bug or calculation issue in Kasab Val Manager
+title: '[BUG] '
 labels: bug
 assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+### Bug Description
+A clear and concise description of the bug or calculation error.
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+### Affected Module
+- [ ] Inward Receiving (Kasab)
+- [ ] Outward Dispatch (Val & Kali)
+- [ ] Parties & Khata Ledger
+- [ ] Operating Expenses & Payments
+- [ ] Reports & P&L
+- [ ] AI Scanner & Camera
+- [ ] Offline Sync & Outbox
+- [ ] App Lock / Security PIN
+- [ ] Other
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+### Steps to Reproduce
+1. Navigate to '...'
+2. Tap on '...'
+3. Enter values '...'
+4. See error or calculation discrepancy
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+### Expected vs. Actual Behavior
+- **Expected:** (e.g. "Net weight should calculate as 23.500 kg")
+- **Actual:** (e.g. "Net weight displayed 24.000 kg")
 
-**Environment (please complete the following information):**
- - OS: [e.g. Android, iOS, Windows]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+### Device & Environment
+- **Device:** [e.g. Android Phone (APK), Mobile Chrome, Desktop Laptop]
+- **OS Version:** [e.g. Android 14, macOS Sonoma, Windows 11]
+- **Connection State:** [e.g. Online, Offline / Airplane Mode, Flaky Wi-Fi]
 
-**Additional context**
-Add any other context about the problem here.
+### Screenshots / Challan Photos
+If applicable, attach screenshots or photo examples to help diagnose the issue.

@@ -1,7 +1,7 @@
-import type { Party, PartyStats } from '../../features/parties/types'
-import type { Receipt } from '../../features/receiving/types'
-import type { Dispatch } from '../../features/dispatch/types'
-import type { Payment } from '../../features/payments/types'
+import type { Party, PartyStats } from '@/features/parties/types'
+import type { Receipt } from '@/features/inward/types'
+import type { Dispatch } from '@/features/outward/types'
+import type { Payment } from '@/features/billing/types'
 
 // ── Derived stats & aggregate helper ──────────────────────────────────────────
 
@@ -25,7 +25,12 @@ export function computePartyStats(
 
     const partyReceipts = receipts.filter((r) => r.party_id === p.id)
     const totalReceivedWeight = partyReceipts.reduce(
-      (sum, r) => sum + (Number(r.net_weight) || 0),
+      (sum, r) => {
+        const net = r.net_weight !== null && r.net_weight !== undefined
+          ? Number(r.net_weight)
+          : Math.max(0, (Number(r.gross_weight) || 0) - (Number(r.tare_weight) || 0))
+        return sum + net
+      },
       0
     )
 

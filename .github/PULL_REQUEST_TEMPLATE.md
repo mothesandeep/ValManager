@@ -1,18 +1,27 @@
 ## Description
-Briefly describe the changes made in this Pull Request.
+Briefly describe the purpose of this Pull Request and the changes introduced.
 
-## Related Issue
-If this PR is related to an existing issue, please link it here.
+## Module / Area Affected
+- [ ] Inward Receiving (Kasab)
+- [ ] Outward Dispatch (Val / Kali)
+- [ ] Parties & Khata Ledger
+- [ ] Operating Expenses & Payments
+- [ ] Reports & Dashboard
+- [ ] AI Challan Scanner
+- [ ] Offline Outbox & Sync
+- [ ] Android Packaging & Capacitor
+- [ ] Documentation / Tooling
 
 ## Type of Change
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Bug fix (non-breaking fix for an existing issue)
+- [ ] New feature (non-breaking addition of functionality)
+- [ ] Breaking change (fix or feature modifying existing data models or APIs)
 - [ ] Documentation update
 
-## Checklist
-- [ ] I have read the [CONTRIBUTING](../CONTRIBUTING.md) document.
-- [ ] My code follows the style guidelines of this project.
-- [ ] I have performed a self-review of my own code.
-- [ ] I have commented my code, particularly in hard-to-understand areas.
-- [ ] My changes generate no new warnings.
+## Verification & Testing Checklist
+- [ ] All 342 automated tests pass (`npm test --prefix app`)
+- [ ] Production build succeeds without TypeScript errors (`npm run build --prefix app`)
+- [ ] Oxlint passes cleanly (`npm run lint --prefix app`)
+- [ ] UI changes verified against [design.md](../design.md) (44px tap targets, `tabular-nums`)
+- [ ] If applicable, Android APK compiles cleanly (`npm run build:apk --prefix app`)
+- [ ] Updated [memory.md](../memory.md) and related markdown documentation

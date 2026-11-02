@@ -20,3 +20,8 @@ app/android/capacitor-cordova-android-plugins
 
 # Playwright MCP
 .playwright-mcp/
+
+# Local database dumps
+backups/*.json
+backups/*.sql
+!backups/.gitkeep

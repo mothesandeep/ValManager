@@ -1,9 +1,12 @@
 import { supabase } from '../supabase'
-import type { Payment, PaymentWithParty } from '../../features/payments/types'
+import type { Payment, PaymentWithParty } from '@/features/billing/types'
 
 
 import { enqueueMutation, isNetworkError } from '../offline/sync'
 import { getPendingMutations, mergePendingMutations, setCachedData, getCachedData } from '../offline/db'
+
+import { emitDataChange } from '../events'
+import { db } from '../offline/db'
 
 // ── Payments ──────────────────────────────────────────────────────────────────
 
@@ -28,9 +31,13 @@ export async function fetchPayments(): Promise<PaymentWithParty[]> {
   return mergePendingMutations(serverData, pending).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 }
 
-export async function insertPayment(payload: PaymentPayload): Promise<void> {
-  const id = crypto.randomUUID()
-  const paymentData = { ...payload, id, created_at: new Date().toISOString() }
+export async function insertPayment(payload: PaymentPayload, customId?: string): Promise<void> {
+  const id = customId || crypto.randomUUID()
+  const paymentData: Payment = { ...payload, id, created_at: new Date().toISOString() }
+
+  // Immediately mirror to local cache
+  void db.cachedPayments.put(paymentData).catch(() => {})
+  emitDataChange('payments', 'INSERT', id)
 
   if (!navigator.onLine) {
     await enqueueMutation('payments', 'INSERT', id, paymentData)
@@ -49,10 +56,16 @@ export async function insertPayment(payload: PaymentPayload): Promise<void> {
   }
 }
 
+export const recordPayment = insertPayment
+
 export async function updatePayment(
   id: string,
   payload: PaymentPayload
 ): Promise<void> {
+  // Immediately mirror to local cache
+  void db.cachedPayments.update(id, payload).catch(() => {})
+  emitDataChange('payments', 'UPDATE', id)
+
   if (!navigator.onLine) {
     await enqueueMutation('payments', 'UPDATE', id, payload)
     return
@@ -74,6 +87,10 @@ export async function updatePayment(
 }
 
 export async function deletePayment(id: string): Promise<void> {
+  // Immediately prune from local cache
+  void db.cachedPayments.delete(id).catch(() => {})
+  emitDataChange('payments', 'DELETE', id)
+
   if (!navigator.onLine) {
     await enqueueMutation('payments', 'DELETE', id, null)
     return

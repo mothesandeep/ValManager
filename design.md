@@ -1,89 +1,151 @@
-# Design — Kasab Val Manager
-**Version:** 1.0
+# Design System — Kasab Val Manager (Blue SaaS 2.0)
+**Version:** 2.0 (Blue SaaS Redesign)  
+**Updated:** November 2026
 
-Design principle for this app: **Papa should never have to think about the interface, only the transaction in front of him.** Every choice below optimizes for a low-technical-comfort, single-purpose, mostly-mobile user — not for visual flair.
+Design principle: **Professional, clutter-free, offline-first SaaS experience.** The interface uses a crisp blue SaaS design language with clear visual hierarchy, robust 44px tap targets, predictable status semantics, and high legibility across mobile (Android Capacitor) and desktop web.
 
 ---
 
 ## 1. Design Tokens
 
-### Color — grounded in the subject: metallic Jari thread + steel machinery
+### Color Palette
 
-| Token | Hex | Use |
-|---|---|---|
-| Paper (background) | `#FAF7F0` | App background — warm, easy on eyes in daylight/outdoor use |
-| Ink (text) | `#241F19` | Primary text |
-| Ink Soft (secondary text) | `#6B6357` | Labels, captions, muted text |
-| Brass (primary accent) | `#A6752B` | Primary buttons, active nav, links — references the Gold/Antique Kasab itself |
-| Brass Dark | `#8A5F1F` | Borders/hover on brass elements |
-| Steel (secondary) | `#5B6472` | Neutral accents — references the Ring Doubler machine |
-| Positive (money in / cleared) | `#3F6B52` | Payments received, balances cleared |
-| Positive Bg | `#EAF1EC` | Positive status background |
-| Due (money owed / pending) | `#A6432F` | Balance due, pending Rola |
-| Due Bg | `#F7EAE6` | Due status background |
-| Card | `#FFFFFF` | Cards, forms, table surfaces |
-| Border | `#E3D9C4` | Dividers, card borders |
+| Token | Hex | Tailwind Equivalent | Use |
+|---|---|---|---|
+| **Primary** | `#2563EB` | `blue-600` | Primary action buttons, active tab indicators, key interactive controls |
+| **Primary Hover** | `#1D4ED8` | `blue-700` | Hover state for primary buttons |
+| **Primary Tint** | `#EFF6FF` | `blue-50` | Active navigation background, subtle selection tint |
+| **Primary Ring** | `#93C5FD` | `blue-300` | Input focus rings, focus-visible indicators |
+| **Background (Light)** | `#F8FAFC` | `slate-50` | Global page canvas backdrop |
+| **Surface (Light)** | `#FFFFFF` | `white` | Cards, modals, drawers, data table surfaces |
+| **Border (Light)** | `#E2E8F0` | `slate-200` | 1px dividers, card borders, table separators |
+| **Text Primary** | `#0F172A` | `slate-900` | Headings, primary text, key metrics |
+| **Text Secondary** | `#475569` | `slate-600` | Secondary labels, descriptions, subheadings |
+| **Text Muted** | `#64748B` | `slate-500` | Captions, placeholders, disabled states |
+| **Positive** | `#15803D` | `green-700` | Paid, cleared balances, completed production |
+| **Positive Bg** | `#F0FDF4` | `green-50` | Background tint for positive status pills |
+| **Due / Alert** | `#B91C1C` | `red-700` | Balance due, pending Rola spools, destructive actions |
+| **Due Bg** | `#FEF2F2` | `red-50` | Background tint for due/alert status pills |
+| **Warning** | `#B45309` | `amber-700` | Pending sync, draft states, warnings |
+| **Warning Bg** | `#FFFBEB` | `amber-50` | Background tint for warning status pills |
 
-No decorative gradients, no drop shadows beyond a 1px border — flat, ledger-like surfaces that stay legible in direct sunlight on a phone screen.
+*Note: Legacy brass, paper, and steel tokens have been replaced with these modern slate/blue tokens.*
+
+---
+
+### OLED Dark Mode Palette
+
+Designed for battery savings and high contrast in low-light factory workshop conditions:
+
+| Token | Hex | Tailwind Equivalent | Use |
+|---|---|---|---|
+| **Background (Dark)** | `#020617` | `slate-950` | Deep OLED black canvas backdrop |
+| **Surface (Dark)** | `#0F172A` | `slate-900` | Dark card, modal, and drawer surfaces |
+| **Border (Dark)** | `#1E293B` | `slate-800` | Dark border separators and dividers |
+| **Text Primary (Dark)** | `#F8FAFC` | `slate-50` | High-contrast dark mode headings and text |
+| **Text Secondary (Dark)**| `#94A3B8` | `slate-400` | Secondary descriptions and field labels |
+| **Text Muted (Dark)** | `#64748B` | `slate-500` | Muted dark mode metadata and placeholders |
+
+- **FOUC Prevention:** Pre-render inline script checks theme preference in `localStorage` and system media query before initial paint.
+- **System Synchronization:** Native Android status bar and navigation bar automatically switch to `#000000` via Capacitor StatusBar API.
+
+---
 
 ### Typography
 
-| Role | Typeface | Notes |
-|---|---|---|
-| Headings / section titles | Space Grotesk (500–700) | Slightly mechanical, technical character — fits the machinery/production subject |
-| Body, forms, tables | Inter (400–600) | Highly legible at small sizes, standard for dense data |
-| Numbers (weights, money, counts) | Inter, `tabular-nums` | Digits align in columns — critical for scanning a weight or balance table quickly |
+- **Font Family:** `Inter` across all headings, body text, buttons, and form inputs.
+- **Tabular Numbers:** Every weight, currency amount, balance, piece count, and date enforces `tabular-nums` (`font-variant-numeric: tabular-nums`) to maintain strict vertical alignment across columns.
+- **Font Weights:**
+  - `400` (Regular): Body copy, table cells, form inputs.
+  - `500` (Medium): Secondary labels, navigation items, buttons.
+  - `600` (Semibold): Card headings, modal titles, status pills.
+  - `700` (Bold): Executive KPI metrics and financial summaries.
 
-No serif, no display font — this is a working tool, not a brochure.
+---
 
-## 2. Navigation
+## 2. Component Specifications
 
-- **Mobile (Papa's primary device):** bottom tab bar, 5–9 icon+label tabs, always visible, one thumb-reachable tap to switch sections.
-- **Desktop/tablet (Sandeep's review use):** left sidebar, same tabs, labels always visible (no icon-only collapse — reduces ambiguity for infrequent desktop use).
-- Tabs, in priority order Papa will actually use them: **Dashboard → Parties → Receiving → Production → Dispatch → Rola → Payments → Expenses → Reports.** This mirrors the real order of the physical job-work flow, so the nav order teaches the workflow.
+- **Border Radii:**
+  - Interactive Controls (Buttons, Inputs, Selects): `rounded-lg` (`8px`).
+  - Cards & Containers (KPI Cards, Tables, Modals): `rounded-xl` (`12px`).
+  - Badges & Status Pills: `rounded-full` (`9999px`).
+- **Touch Target Floor:**
+  - Minimum touch target dimension of **44px × 44px** on all clickable controls, buttons, and list items.
+- **Focus States:**
+  - Accessible outline with high visibility: `focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2`.
+- **Status Pills:**
+  - Semantic pill format (`px-2.5 py-0.5 rounded-full text-xs font-semibold`) pairing explicit text with color (e.g. `✓ Synced`, `⚠ 3 Pending`, `Due`).
 
-## 3. Screen Patterns
+---
 
-### Dashboard
-First thing Papa sees. 5 KPI cards (Parties, Production active, Rola pending, Balance due, Expenses this month) — no chart clutter, just the numbers that answer "how's the business today." Two recent-activity tables (Receiving, Dispatch) below, each with a "View all" link into the full module.
+## 3. Navigation System
 
-### Entry forms (Receiving, Production, Dispatch, Rola return, Payment, Expense)
-- Every form opens inline (not a separate page/modal) directly above the list it feeds — Papa sees the form and the history in the same view, no lost context.
-- **Dropdowns over free text** wherever the value is from a known set (party, color, cord count, twist type, status, expense category) — Papa selects, doesn't type, which avoids typos that would break party-matching or reporting.
-- Any field the app can calculate (net weight, net Val weight, balances) is shown **live as Papa types**, in a highlighted read-only box — he sees the answer before he even submits, building trust in the number.
-- Required fields marked with `*`; forms won't submit without them, with the fewest possible required fields (only what's truly needed to make the entry useful).
+### Desktop (Collapsible Sidebar)
+- Expandable left navigation rail displaying clear icons and text labels.
+- **Active Navigation Item:** `bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 font-semibold`.
+- **Hover Navigation Item:** `hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors`.
 
-### Tables
-- Flat, bordered rows (not cards) for dense data — a ledger feel, sortable by most-recent-first by default (Papa wants "what did I just do," not alphabetical).
-- Edit (pencil) and delete (trash, with inline confirm — tap once to arm, tap check to confirm) icons at the row end, always visible, no hidden hover-only actions (touch devices have no hover).
+### Mobile (Thumb-Zone Navigation)
+- Fixed bottom navigation bar with 4 primary operational routes + 1 "More" drawer trigger:
+  1. **Dashboard** (`/`)
+  2. **Inward** (`/receiving`)
+  3. **Outward** (`/dispatch`)
+  4. **Payments** (`/payments`)
+  5. **More** (Opens responsive sheet for Parties, Expenses, Reports, and Settings).
+- **SpeedDial Floating Action Button (FAB):**
+  - Positioned at `bottom-20 right-4` within comfortable one-handed thumb reach.
+  - Contextually provides 1-tap direct creation for the active route.
 
-### Party cards
-Every party shows Rola pending and balance due right on the card — the two numbers Papa actually needs to decide "should I call this party." No need to open a detail screen for the headline numbers.
+---
 
-### Status colors (used consistently everywhere)
-- Brass = neutral/primary action
-- Green (Positive) = money received, balance clear, production done
-- Red (Due) = balance owed, Rola pending, production not done
+## 4. Desktop & Keyboard Ergonomics
 
-Same three colors mean the same thing on every screen — Papa learns the color language once.
+- **Command Palette:** Global modal invoked via `Cmd+K` or `Ctrl+K` for instant fuzzy navigation to any module, action, or settings tab.
+- **Two-Key Quick Sequences:** Fast keyboard shortcuts with typing input guards:
+  - `N + I` → New Inward Receipt
+  - `N + O` → New Outward Dispatch
+  - `N + P` → Record Payment
+  - `N + E` → Log Expense
+- **Global Save Interception:** `Ctrl+S` / `Cmd+S` intercepts browser Save-As dialogs to validate and submit the active open form or drawer.
+- **Escape Key Dismissal:** `Esc` cleanly closes modals, drawers, and floating menus without submitting changes.
 
-## 4. Sync Status (new for the real app, vs. the prototype)
+---
 
-A small, always-visible indicator in the header: a checkmark + "All synced" when everything has reached Supabase + the Google Sheet, or a count ("3 pending") when offline/syncing. Tapping it shows nothing more than that count — no technical detail, no jargon. This is the one new piece of UI the real app needs beyond the prototype, to make the backup guarantee visible without requiring Papa to trust an invisible process.
+## 5. Three-Tier Saved Data Deletion UX ("Galti-Proof")
 
-## 5. Empty & Error States
+To prevent accidental data loss while working in harsh workshop environments, deletion follows three distinct, complementary UX patterns:
 
-- Empty state copy tells Papa exactly what to do next in plain words: *"No parties yet. Add the first party to start tracking their work."* — never a bare "No data."
-- Error states never blame Papa or apologize; they state what happened and what to do: *"Could not save last change — check your connection and try again."*
-- A failed Google Sheets sync never blocks Papa's work — it queues silently and retries; only the sync-status indicator reflects it.
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ Pattern 1: Swipe-to-Trash with Undo Banner (Mobile List Rows)          │
+│ - Fluid Framer Motion swipe gesture with -50px haptic resistance       │
+│ - Auto-delete trigger threshold at -160px with warning red backdrop    │
+│ - Instant visual disappearance + 5-second floating [Undo] toast        │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Record deleted
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ Pattern 2: The Danger Zone & Alertdialog (Detailed Form Edits)         │
+│ - Visually isolated red-bordered container at the bottom of edit view   │
+│ - Explicit named entity label (e.g. Delete "Challan #104 - Vikas")     │
+│ - WAI-ARIA alertdialog with initial focus locked to neutral Cancel     │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Confirmed deletion
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ Pattern 3: Soft Delete / 30-Day Trash Bin (System Recovery)            │
+│ - Preserves full entity payload with timestamp in trashBinService      │
+│ - 30-day retention cutoff before permanent purge                      │
+│ - In-app Trash Bin modal in Settings with 1-click domain restoration   │
+└────────────────────────────────────────────────────────────────────────┘
+```
 
-## 6. Accessibility & Usability Floor
+---
 
-- Minimum tap target 40×40px on all interactive elements (buttons, row actions) — designed for a mid-range Android phone, possibly used with dry/rough hands after machine work.
-- Color is never the only signal — status also uses text labels ("Done", "Pending due"), so the app remains usable if a screen looks washed out in sunlight.
-- All forms keyboard/tab-navigable for the rare desktop review session.
-- No animation beyond simple state transitions (form open/close) — nothing that delays Papa getting back to work.
+## 6. Status Semantics Floor
 
-## 7. What Carries Over From the Prototype
-
-The chat-based prototype (`kasab-val-manager.jsx`) already implements this exact token system, navigation pattern, and component set inside the artifact environment. Rebuilding as the real app (see `architecture.md`) is a **backend swap, not a redesign** — the visual system and interaction patterns are considered validated and should be carried forward as-is into the Supabase-backed version.
+Colors convey consistent meaning throughout the application:
+- **Green (`#15803D` / `#F0FDF4`):** Completed orders, cleared Khata balances, payments received, all records synced.
+- **Red (`#B91C1C` / `#FEF2F2`):** Outstanding balances owed, pending Rola returns, destructive actions, offline error states.
+- **Blue (`#2563EB` / `#EFF6FF`):** Primary interactive CTAs, active selections, navigation highlights.
+- **Amber (`#B45309` / `#FFFBEB`):** Unsynced offline outbox mutations, draft challenger scans, non-blocking warnings.

@@ -1,6 +1,6 @@
-import type { Party } from '../parties/types'
-import { STANDARD_ROLA_WEIGHT_G, STANDARD_BORI_WEIGHT_G } from '../receiving/calculations'
-import { STANDARD_BUNGARI_WEIGHT_G } from '../dispatch/calculations'
+import type { Party } from '@/features/parties/types'
+import { STANDARD_ROLA_WEIGHT_G, STANDARD_BORI_WEIGHT_G } from '@/features/inward/utils/calculations'
+import { STANDARD_BUNGARI_WEIGHT_G } from '@/features/outward/utils/calculations'
 
 export { STANDARD_ROLA_WEIGHT_G, STANDARD_BUNGARI_WEIGHT_G, STANDARD_BORI_WEIGHT_G }
 
@@ -214,3 +214,174 @@ export function getTarRate(tar: number | string): number {
   const found = rates.find((r) => r.tar === tarNum)
   return found ? Number(found.rate) || 0 : 0
 }
+
+// ── Company Header & GSTIN Settings ──────────────────────────────────────────
+
+export const STORAGE_KEY_COMPANY_SETTINGS = 'kasab_company_profile_settings'
+
+export interface CompanySettings {
+  companyName: string
+  gstin: string
+  address: string
+  phone: string
+  email: string
+  challanTerms: string
+  weightUnit: 'kg' | 'g'
+  currencyUnit: 'INR'
+  bankName?: string
+  accountNumber?: string
+  ifsc?: string
+  branch?: string
+  upiId?: string
+}
+
+export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
+  companyName: 'Kasab Val Processors',
+  gstin: '24AABCK1234F1Z5',
+  address: 'Plot No. 42, GIDC Industrial Estate, Katargam, Surat - 395004, Gujarat',
+  phone: '+91 98251 00000',
+  email: 'accounts@kasabval.com',
+  challanTerms: 'Subject to Surat jurisdiction. Goods processed on job-work basis under GST Sec 143. Payment due within 15 days.',
+  weightUnit: 'kg',
+  currencyUnit: 'INR',
+  bankName: 'HDFC Bank Ltd',
+  accountNumber: '50200084729103',
+  ifsc: 'HDFC0000240',
+  branch: 'Ring Road / Katargam Branch, Surat',
+  upiId: 'kasabval@okhdfcbank',
+}
+
+export function getCompanySettings(): CompanySettings {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_COMPANY_SETTINGS)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        return {
+          ...DEFAULT_COMPANY_SETTINGS,
+          ...parsed,
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Could not read company settings from localStorage:', err)
+  }
+  return DEFAULT_COMPANY_SETTINGS
+}
+
+export function saveCompanySettings(settings: Partial<CompanySettings>): void {
+  try {
+    const current = getCompanySettings()
+    const merged = { ...current, ...settings }
+    localStorage.setItem(STORAGE_KEY_COMPANY_SETTINGS, JSON.stringify(merged))
+  } catch (err) {
+    console.warn('Could not save company settings to localStorage:', err)
+  }
+}
+
+// ── Full Database & Settings Backup / Export ─────────────────────────────────
+
+export interface FullBackupPayload {
+  version: number
+  exportedAt: string
+  appName: string
+  settings: {
+    globalSettings: AppGlobalSettings
+    tarRates: TarRateConfig[]
+    partyBigRolaMap: Record<string, number>
+    companySettings: CompanySettings
+  }
+  dexieData: {
+    parties: unknown[]
+    receipts: unknown[]
+    dispatches: unknown[]
+    expenses: unknown[]
+    payments: unknown[]
+  }
+}
+
+export async function exportDatabaseBackup(): Promise<string> {
+  const { db } = await import('../../lib/offline/db')
+
+  const [parties, receipts, dispatches, expenses, payments] = await Promise.all([
+    db.cachedParties.toArray().catch(() => []),
+    db.cachedReceipts.toArray().catch(() => []),
+    db.cachedDispatches.toArray().catch(() => []),
+    db.cachedExpenses.toArray().catch(() => []),
+    db.cachedPayments.toArray().catch(() => []),
+  ])
+
+  const payload: FullBackupPayload = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    appName: 'ValManager',
+    settings: {
+      globalSettings: getGlobalSettings(),
+      tarRates: getTarRates(),
+      partyBigRolaMap: getPartyBigRolaMap(),
+      companySettings: getCompanySettings(),
+    },
+    dexieData: {
+      parties,
+      receipts,
+      dispatches,
+      expenses,
+      payments,
+    },
+  }
+
+  return JSON.stringify(payload, null, 2)
+}
+
+export async function importDatabaseBackup(jsonString: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const data = JSON.parse(jsonString) as Partial<FullBackupPayload>
+    if (!data.appName || (!data.settings && !data.dexieData)) {
+      return { success: false, message: 'Invalid backup file format.' }
+    }
+
+    if (data.settings) {
+      if (data.settings.globalSettings) saveGlobalSettings(data.settings.globalSettings)
+      if (data.settings.tarRates) saveTarRates(data.settings.tarRates)
+      if (data.settings.companySettings) saveCompanySettings(data.settings.companySettings)
+      if (data.settings.partyBigRolaMap) {
+        localStorage.setItem(STORAGE_KEY_PARTY_BIG_ROLA, JSON.stringify(data.settings.partyBigRolaMap))
+      }
+    }
+
+    const { db } = await import('../../lib/offline/db')
+    if (data.dexieData) {
+      if (Array.isArray(data.dexieData.parties) && data.dexieData.parties.length > 0) {
+        await db.cachedParties.bulkPut(data.dexieData.parties as Parameters<typeof db.cachedParties.bulkPut>[0])
+      }
+      if (Array.isArray(data.dexieData.receipts) && data.dexieData.receipts.length > 0) {
+        await db.cachedReceipts.bulkPut(data.dexieData.receipts as Parameters<typeof db.cachedReceipts.bulkPut>[0])
+      }
+      if (Array.isArray(data.dexieData.dispatches) && data.dexieData.dispatches.length > 0) {
+        await db.cachedDispatches.bulkPut(data.dexieData.dispatches as Parameters<typeof db.cachedDispatches.bulkPut>[0])
+      }
+      if (Array.isArray(data.dexieData.expenses) && data.dexieData.expenses.length > 0) {
+        await db.cachedExpenses.bulkPut(data.dexieData.expenses as Parameters<typeof db.cachedExpenses.bulkPut>[0])
+      }
+      if (Array.isArray(data.dexieData.payments) && data.dexieData.payments.length > 0) {
+        await db.cachedPayments.bulkPut(data.dexieData.payments as Parameters<typeof db.cachedPayments.bulkPut>[0])
+      }
+    }
+
+    return { success: true, message: 'Backup restored successfully into local storage & offline database.' }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error during import.'
+    return { success: false, message: `Failed to restore backup: ${msg}` }
+  }
+}
+
+export { getPartyInitials } from '@/features/parties/utils'
+export {
+  takeAutoSnapshot,
+  restoreAutoSnapshot,
+  getLatestAutoSnapshot,
+  getPreviousAutoSnapshot,
+  downloadSnapshotAsFile,
+  type AutoSnapshotSummary,
+} from '@/services/storage/autoBackupService'
+

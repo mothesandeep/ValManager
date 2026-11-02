@@ -1,20 +1,30 @@
 ---
-name: Feature request
-about: Suggest an idea for this project
-title: ''
+name: Feature Request
+about: Suggest a feature or enhancement for Kasab Val Manager
+title: '[FEAT] '
 labels: enhancement
 assignees: ''
 
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+### Problem Description
+A clear and concise description of the operator problem or friction point you are trying to solve (e.g. "Entering tare weight takes too many taps when...").
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+### Proposed Solution
+Describe the solution or enhancement you'd like to see implemented.
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+### Module / Workflow
+- [ ] Inward Receiving (Kasab)
+- [ ] Outward Dispatch (Val & Kali)
+- [ ] Parties & Khata Ledger
+- [ ] Operating Expenses & Payments
+- [ ] Reports & Analytics
+- [ ] AI Scanner & Camera
+- [ ] Settings & Backups
+- [ ] Android Mobile Experience
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+### Operator Considerations
+How does this impact Papa's daily speed and ergonomics on the factory floor? (Does it add extra taps? Does it respect offline operation?)
+
+### Additional Context
+Add any sketches, mockups, or challan examples to support your proposal.

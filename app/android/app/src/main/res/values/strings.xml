@@ -1,7 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Kasab Val Manager</string>
-    <string name="title_activity_main">Kasab Val Manager</string>
+    <string name="app_name">ValManager</string>
+    <string name="title_activity_main">ValManager</string>
     <string name="package_name">com.kasabval.manager</string>
     <string name="custom_url_scheme">com.kasabval.manager</string>
+    <string name="share_to_valmanager">Add to ValManager</string>
 </resources>

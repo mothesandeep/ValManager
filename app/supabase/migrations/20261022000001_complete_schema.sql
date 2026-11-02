@@ -140,7 +140,36 @@ alter table sync_failures     enable row level security;
 alter table rola_returns      enable row level security;
 alter table production_orders enable row level security;
 
--- Open Anon Policies (Allows frontend with anon key to perform CRUD)
+-- Helper function to verify token or PIN from request headers
+create or replace function public.is_app_authorized()
+returns boolean as $$
+declare
+  req_headers json;
+  header_pin text;
+  header_token text;
+begin
+  if current_user in ('postgres', 'supabase_admin', 'service_role') then
+    return true;
+  end if;
+
+  begin
+    req_headers := current_setting('request.headers', true)::json;
+  exception when others then
+    req_headers := null;
+  end;
+
+  if req_headers is null then
+    return false;
+  end if;
+
+  header_pin := req_headers->>'x-app-pin';
+  header_token := coalesce(req_headers->>'x-user-token', req_headers->>'x-app-token');
+
+  return (header_pin = '7878') or (header_token = 'kasab_secure_prod_token_2026');
+end;
+$$ language plpgsql security definer;
+
+-- Secure Anon Policies (Requires authorized user token or PIN; prevents public bot scraping)
 drop policy if exists "anon_all_parties" on parties;
 drop policy if exists "anon_all_receipts" on receipts;
 drop policy if exists "anon_all_dispatches" on dispatches;
@@ -150,11 +179,11 @@ drop policy if exists "anon_all_sync_failures" on sync_failures;
 drop policy if exists "anon_all_rola_returns" on rola_returns;
 drop policy if exists "anon_all_production_orders" on production_orders;
 
-create policy "anon_all_parties"           on parties           for all to anon using (true) with check (true);
-create policy "anon_all_receipts"          on receipts          for all to anon using (true) with check (true);
-create policy "anon_all_dispatches"        on dispatches        for all to anon using (true) with check (true);
-create policy "anon_all_payments"          on payments          for all to anon using (true) with check (true);
-create policy "anon_all_expenses"          on expenses          for all to anon using (true) with check (true);
-create policy "anon_all_sync_failures"     on sync_failures     for all to anon using (true) with check (true);
-create policy "anon_all_rola_returns"      on rola_returns      for all to anon using (true) with check (true);
-create policy "anon_all_production_orders" on production_orders for all to anon using (true) with check (true);
+create policy "anon_all_parties"           on parties           for all to anon using (public.is_app_authorized()) with check (public.is_app_authorized());
+create policy "anon_all_receipts"          on receipts          for all to anon using (public.is_app_authorized()) with check (public.is_app_authorized());
+create policy "anon_all_dispatches"        on dispatches        for all to anon using (public.is_app_authorized()) with check (public.is_app_authorized());
+create policy "anon_all_payments"          on payments          for all to anon using (public.is_app_authorized()) with check (public.is_app_authorized());
+create policy "anon_all_expenses"          on expenses          for all to anon using (public.is_app_authorized()) with check (public.is_app_authorized());
+create policy "anon_all_sync_failures"     on sync_failures     for all to anon using (public.is_app_authorized()) with check (public.is_app_authorized());
+create policy "anon_all_rola_returns"      on rola_returns      for all to anon using (public.is_app_authorized()) with check (public.is_app_authorized());
+create policy "anon_all_production_orders" on production_orders for all to anon using (public.is_app_authorized()) with check (public.is_app_authorized());

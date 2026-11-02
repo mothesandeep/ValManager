@@ -1,76 +1,243 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  /* ── High-Contrast Modern B2B SaaS (Linear / Stripe style) Design Tokens ── */
-  --color-paper:        #F8FAFC;   /* App background - clean slate-50 */
-  --color-ink:          #0F172A;   /* Primary text - slate-900 */
-  --color-ink-soft:     #64748B;   /* Secondary text, labels, subtitles - slate-500 */
-  --color-brass:        #0F172A;   /* Solid Slate-900 */
-  --color-brass-dark:   #020617;   /* Slate-950 */
-  --color-brass-soft:   #F1F5F9;   /* Slate-100 */
-  --color-primary:      #0F172A;   /* Primary Solid Slate-900 */
-  --color-primary-dark: #020617;   /* Slate-950 */
-  --color-primary-soft: #F1F5F9;   /* Slate-100 */
-  --color-steel:        #64748B;   /* Slate-500 */
-  --color-positive:     #16A34A;   /* Emerald-600 */
-  --color-positive-bg:  #F0FDF4;   /* Emerald-50 */
-  --color-positive-border: #BBF7D0; /* Emerald-200 */
-  --color-due:          #E11D48;   /* Rose-600 */
-  --color-due-bg:       #FFF1F2;   /* Rose-50 */
-  --color-negative:     #E11D48;   /* Rose-600 */
-  --color-negative-bg:  #FFF1F2;   /* Rose-50 */
-  --color-card:         #FFFFFF;   /* Cards, forms, tables */
-  --color-border:       #E2E8F0;   /* Slate-200 */
-  --color-border-soft:  #F1F5F9;   /* Slate-100 */
-  --color-overlay:      rgba(15, 23, 42, 0.45); /* Modal overlay */
+  /* ── 1. The Professional Blue SaaS Palette ── */
+  --color-primary:           #2563EB;   /* Blue-600 Primary Action */
+  --color-primary-hover:     #1D4ED8;   /* Blue-700 Hover State */
+  --color-primary-tint:      #EFF6FF;   /* Blue-50 Active Nav / Selection Tint */
+  --color-primary-ring:      #93C5FD;   /* Blue-300 Focus Ring */
 
-  /* Typography */
-  --font-display: 'Inter', system-ui, sans-serif;
-  --font-body:    'Inter', system-ui, sans-serif;
+  --color-background:        #F8FAFC;   /* Slate-50 Page Canvas Background */
+  --color-surface:           #FFFFFF;   /* Solid White Card / Modal Surface */
+  --color-border:            #E2E8F0;   /* Slate-200 1px Layout & Table Border */
+  --color-border-soft:       #F1F5F9;   /* Slate-100 Light Dividers */
 
-  /* Shadows (Minimal & Premium) */
-  --shadow-2xs: 0 1px 2px rgba(0,0,0,0.03);
-  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -4px rgba(0,0,0,0.05);
+  /* Neutral Text Hierarchy */
+  --color-text:              #1E293B;   /* Dark Slate-800 Primary Text */
+  --color-text-secondary:    #475569;   /* Slate-600 Secondary Labels */
+  --color-text-muted:        #64748B;   /* Slate-500 Muted Captions */
+
+  /* Aliases for backwards compatibility */
+  --color-ink:               #1E293B;   /* Dark Slate-800 Primary Text & Numbers */
+  --color-ink-soft:          #475569;   /* Slate-600 */
+  --color-ink-muted:         #64748B;   /* Slate-500 */
+  --color-paper:             #F8FAFC;   /* Cool Soft Slate-50 */
+  --color-card:              #FFFFFF;   /* Pure Solid White */
+  --color-card-elevated:     #FFFFFF;
+
+  --color-brand:             #2563EB;   /* Standard Royal Blue / Blue-600 */
+  --color-brand-hover:       #1D4ED8;   /* Deep Blue-700 */
+  --color-brand-soft:        #EFF6FF;   /* Light Blue-50 */
+  --color-brand-border:      #93C5FD;
+
+  /* Semantic Status Tokens (Strictly Green = done/paid, Red = due/pending, Amber = warning, Blue = actions) */
+  --color-positive:          #15803D;   /* Green-700 Positive Data / Paid */
+  --color-positive-bg:       #F0FDF4;   /* Green-50 Positive Tint */
+  --color-positive-border:   #BBF7D0;   /* Green-200 Border */
+
+  --color-due:               #B91C1C;   /* Red-700 Alert / Dues / Pending */
+  --color-due-bg:            #FEF2F2;   /* Red-50 Tint */
+  --color-due-border:        #FECACA;   /* Red-200 Border */
+
+  --color-warning:           #B45309;   /* Amber-700 Warning */
+  --color-warning-bg:        #FFFBEB;   /* Amber-50 Tint */
+  --color-warning-border:    #FDE68A;   /* Amber-200 Border */
+
+  --color-destructive:       #B91C1C;
+  --color-destructive-bg:    #FEF2F2;
+  --color-destructive-border:#FECACA;
+  --color-negative:          #B91C1C;
+  --color-negative-bg:       #FEF2F2;
+
+  --color-overlay:           rgba(15, 23, 42, 0.45);
+
+  /* Typography: Inter Only */
+  --font-display: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-body:    'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Shadows: Clean SaaS shadow-sm */
+  --shadow-2xs: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm:  0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md:  0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg:  0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
   
-  /* Radius */
+  /* Radius: 8px controls, 12px cards */
   --radius-sm: 6px;
-  --radius-md: 8px;
+  --radius-md: 8px;     /* 8px controls (Button, Input, Select) */
   --radius-lg: 10px;
-  --radius-xl: 14px;
+  --radius-xl: 12px;    /* 12px cards & containers */
+  --radius-2xl: 16px;
 }
 
 /* ── Base ── */
 *, *::before, *::after {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
 }
 
 html {
+  min-height: 100%;
+  color-scheme: light;
   font-family: var(--font-body);
-  background-color: var(--color-paper);
-  color: var(--color-ink);
+  background-color: var(--color-background);
+  color: var(--color-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+html.dark {
+  color-scheme: dark;
+  --color-paper:        #020617;
+  --color-background:   #020617;
+  --color-canvas-dark:  #0B0F19;
+  --color-surface:      #0F172A;
+  --color-panel-dark:   #1E2533;
+  --color-ink:          #F8FAFC;
+  --color-text:         #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted:   #64748B;
+  --color-ink-soft:     #94A3B8;
+  --color-ink-muted:    #64748B;
+  --color-primary:      #3B82F6;
+  --color-primary-hover:#2563EB;
+  --color-primary-tint: rgba(59, 130, 246, 0.15);
+  --color-primary-ring: #60A5FA;
+  --color-brand:        #3B82F6;
+  --color-brand-hover:  #2563EB;
+  --color-brand-soft:   rgba(59, 130, 246, 0.15);
+  --color-brand-border: rgba(59, 130, 246, 0.35);
+  --color-card:         #0F172A;
+  --color-card-elevated:#1E2533;
+  --color-border:       #1E293B;
+  --color-border-soft:  #0F172A;
+  --color-positive:     #22C55E;
+  --color-positive-bg:  #064E3B;
+  --color-positive-border: #065F46;
+  --color-due:          #EF4444;
+  --color-due-bg:       #450A0A;
+  --color-due-border:   #7F1D1D;
+  --color-destructive:  #EF4444;
+  --color-destructive-bg: #450A0A;
+  --color-destructive-border:#7F1D1D;
+  --color-negative:     #EF4444;
+  --color-negative-bg:  #450A0A;
+  --color-warning:      #F59E0B;
+  --color-warning-bg:   #451A03;
+  --color-warning-border:#78350F;
+  --color-overlay:      rgba(2, 6, 23, 0.75);
+}
+
 body {
   margin: 0;
-  min-height: 100dvh;
-  background-color: var(--color-paper);
-  color: var(--color-ink);
-  
-  /* Native App Optimizations */
-  overscroll-behavior-y: none; /* Disable pull-to-refresh bounce */
-  -webkit-tap-highlight-color: transparent; /* Remove blue tap highlight on Android */
-  -webkit-touch-callout: none; /* Disable long-press context menu */
+  min-height: 100%;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  min-height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Allow text selection specifically for data entry inputs and textareas */
+input, textarea, [contenteditable="true"] {
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 /* Prevent accidental text selection on interactive elements */
 button, a, select, [role="button"] {
-  user-select: none;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* ── Global Interactive Cursors for Desktop Web ── */
+button:not(:disabled),
+a[href],
+select:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="tab"],
+[role="menuitem"],
+[role="option"],
+label[for],
+summary {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+[role="button"][aria-disabled="true"],
+[disabled] {
+  cursor: not-allowed;
+}
+
+/* ── Global Accessible Focus Visible Indicator for Desktop Web ── */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #2563EB !important;
+  outline-offset: 2px !important;
+}
+
+html.dark button:focus-visible,
+html.dark a:focus-visible,
+html.dark [role="button"]:focus-visible,
+html.dark input:focus-visible,
+html.dark select:focus-visible,
+html.dark textarea:focus-visible {
+  outline: 2px solid #60A5FA !important;
+  outline-offset: 2px !important;
+}
+
+/* Accessible hover transition for interactive elements */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+a {
+  transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Safe area insets utilities */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+.pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.bottom-nav-safe-padding {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 68px);
+}
+
+.safe-area-pb {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
 }
 
 /* Navigation link focus and outline reset */
@@ -92,37 +259,97 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: -0.02em;
 }
 
-/* Input and Select focus — minimal outline */
+/* Blue Focus Ring on Inputs */
 input:focus, select:focus, textarea:focus {
   outline: none;
-  border-color: var(--color-brass) !important;
-  box-shadow: 0 0 0 2px var(--color-brass-soft);
+  border-color: #2563EB !important;
+  box-shadow: 0 0 0 2px #93C5FD;
+}
+
+html.dark input:focus, html.dark select:focus, html.dark textarea:focus {
+  outline: none;
+  border-color: #3B82F6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
 }
 
 ::selection {
-  background: var(--color-brass-soft);
-  color: var(--color-ink);
+  background: #EFF6FF;
+  color: #1D4ED8;
 }
 
-/* Minimum tap target — 44px per iOS HIG */
-button, a, [role="button"], input, select {
+html.dark ::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: #93C5FD;
+}
+
+/* Minimum tap target — 44px on interactive controls */
+:where(button, a, [role="button"], input, select):not([class*="h-"]):not([class*="size-"]) {
   min-height: 44px;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* Clean slate-50 table headers */
+table thead th {
+  background-color: #F8FAFC;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #E2E8F0;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
+
+html.dark table thead th {
+  background-color: #0F172A;
+  color: #94A3B8;
+  border-bottom: 1px solid #1E293B;
 }
-::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 4px;
+
+/* ── Desktop Scrollbar Styling ── */
+@media (min-width: 769px) {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94A3B8;
+  }
 }
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-steel);
+
+/* Hide scrollbar globally across mobile devices (<768px) */
+@layer utilities {
+  @media (max-width: 768px) {
+    *:not(.show-scrollbar):not(.scrollbar-thin) {
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
+    *:not(.show-scrollbar):not(.scrollbar-thin)::-webkit-scrollbar {
+      display: none !important;
+      width: 0px !important;
+      height: 0px !important;
+      background: transparent !important;
+    }
+  }
+}
+
+.scrollbar-hide::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+  background: transparent !important;
+}
+
+.scrollbar-hide,
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }
 
 /* ── Skeleton loading shimmer ── */
@@ -144,4 +371,159 @@ button, a, [role="button"], input, select {
   color: transparent !important;
   user-select: none;
   pointer-events: none;
+}
+
+/* ── Responsive Data Table Swipe & Sticky Column Utilities ── */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+  display: block !important;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+.table-scroll-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  position: relative;
+}
+
+.table-sticky-header th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.pinned-col-header {
+  position: sticky !important;
+  left: 0;
+  z-index: 30 !important;
+  box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.07);
+}
+
+.pinned-col-cell {
+  position: sticky !important;
+  left: 0;
+  z-index: 15 !important;
+  box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.07);
+}
+
+.pinned-col-check-header {
+  position: sticky !important;
+  left: 0;
+  z-index: 30 !important;
+}
+
+.pinned-col-check-cell {
+  position: sticky !important;
+  left: 0;
+  z-index: 15 !important;
+}
+
+.pinned-col-party-offset-header {
+  position: sticky !important;
+  left: 44px;
+  z-index: 30 !important;
+  box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.07);
+}
+
+.pinned-col-party-offset-cell {
+  position: sticky !important;
+  left: 44px;
+  z-index: 15 !important;
+  box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.07);
+}
+
+/* ── Production-Grade Print Utilities ── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm;
+  }
+
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print, .modal-backdrop, .modal-header, nav, aside {
+    display: none !important;
+  }
+
+  tr, .avoid-break, .page-break-inside-avoid {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .page-break-after-always {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+}
+
+@media screen {
+  .print-only {
+    display: none !important;
+  }
+}
+
+body.scanner-modal-open,
+body.modal-open,
+body.more-sheet-open {
+  overflow: hidden !important;
+}
+
+body.scanner-modal-open .mobile-speed-dial-container,
+body.scanner-modal-open [data-fab],
+body.modal-open .mobile-speed-dial-container,
+body.modal-open [data-fab],
+body.more-sheet-open .mobile-speed-dial-container,
+body.more-sheet-open [data-fab],
+body.period-sheet-open .mobile-speed-dial-container,
+body.period-sheet-open [data-fab] {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: scale(0.9) !important;
+}
+
+/* ── PIN Error Shake Animation ── */
+@keyframes pin-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20%, 60% {
+    transform: translateX(-10px);
+  }
+  40%, 80% {
+    transform: translateX(10px);
+  }
+}
+
+.animate-pin-shake {
+  animation: pin-shake 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }

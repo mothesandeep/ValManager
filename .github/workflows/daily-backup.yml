@@ -1,0 +1,72 @@
+name: Daily Automated Database Backup
+
+on:
+  schedule:
+    # 20:00 UTC every day = 01:30 AM IST (Surat local time)
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: 'Backup retention in days'
+        required: false
+        default: '90'
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    name: Run Database Snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run Automated Database Backup
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_USER_API_TOKEN: ${{ secrets.VITE_USER_API_TOKEN }}
+          VITE_MASTER_PIN: ${{ secrets.VITE_MASTER_PIN || '7878' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_RETENTION_DAYS: ${{ github.event.inputs.retention_days || 30 }}
+        run: |
+          node scripts/backup-db.mjs
+
+      - name: Upload Backup to GitHub Artifacts (90-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: valmanager-db-backup-${{ github.run_id }}
+          path: backups/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Commit Latest Backup to backups Branch (Optional/Fail-safe)
+        if: env.BACKUP_COMMIT_ENABLED == 'true'
+        env:
+          BACKUP_COMMIT_ENABLED: ${{ secrets.BACKUP_COMMIT_ENABLED }}
+        run: |
+          git config user.name "ValManager Automated Backup"
+          git config user.email "backup-bot@kasabval.internal"
+          git checkout -B backups
+          git add backups/
+          git commit -m "chore(backup): automated database snapshot [skip ci] $(date -u +'%Y-%m-%d %H:%M:%SZ')" || echo "No changes to commit"
+          git push -f origin backups || echo "Push skipped or not configured"
+
+      - name: Generate Workflow Summary
+        run: |
+          echo "### 📦 ValManager Automated Backup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Timestamp (UTC)** | $(date -u +'%Y-%m-%d %H:%M:%SZ') |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | ✅ Backup Completed Successfully |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Artifact Retention** | 90 Days |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Backup files saved in \`backups/\` artifact archive." >> $GITHUB_STEP_SUMMARY
+
