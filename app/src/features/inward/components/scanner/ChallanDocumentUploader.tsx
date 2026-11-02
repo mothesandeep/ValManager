@@ -195,15 +195,15 @@ export function ChallanDocumentUploader({
       ) : isProcessingPhoto ? (
         /* Instant Full-Card Skeleton / Loading Overlay on Photo Capture */
         <div className="w-full h-full flex-1 flex flex-col justify-center items-center my-1 lg:my-0 min-h-[300px] lg:min-h-0">
-          <div className="w-full h-full flex-1 rounded-2xl border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/60 dark:bg-indigo-950/30 p-8 text-center animate-pulse flex flex-col items-center justify-center">
+          <div className="w-full h-full flex-1 rounded-2xl border border-blue-200 dark:border-blue-800/80 bg-blue-50/60 dark:bg-blue-950/30 p-8 text-center animate-pulse flex flex-col items-center justify-center">
             <div className="relative mb-3.5">
-              <div className="w-12 h-12 rounded-full border-3 border-indigo-200 dark:border-indigo-900 border-t-indigo-600 animate-spin" />
-              <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400 absolute inset-0 m-auto" />
+              <div className="w-12 h-12 rounded-full border-3 border-blue-200 dark:border-blue-900 border-t-blue-600 animate-spin" />
+              <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400 absolute inset-0 m-auto" />
             </div>
-            <h3 className="text-sm font-semibold text-indigo-950 dark:text-indigo-100 mb-1">
+            <h3 className="text-sm font-semibold text-blue-950 dark:text-blue-100 mb-1">
               Optimizing challan photo & scanning with Gemini...
             </h3>
-            <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80 max-w-xs leading-relaxed">
+            <p className="text-xs text-blue-700/80 dark:text-blue-300/80 max-w-xs leading-relaxed">
               Preparing high-clarity image for instant OCR processing.
             </p>
           </div>
@@ -213,13 +213,13 @@ export function ChallanDocumentUploader({
         <div className="w-full h-full flex-1 flex flex-col justify-center items-center my-1 lg:my-0 min-h-[300px] lg:min-h-0">
           <div
             onClick={onOpenFileBrowser}
-            className={`w-full h-full flex-1 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-900 hover:border-indigo-400 dark:hover:border-indigo-600 p-6 sm:p-8 text-center cursor-pointer transition-all duration-200 shadow-2xs ${
+            className={`w-full h-full flex-1 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-600 p-6 sm:p-8 text-center cursor-pointer transition-all duration-200 shadow-2xs ${
               isFileDragging
-                ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 ring-4 ring-indigo-500/10'
+                ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/30 ring-4 ring-blue-500/10'
                 : ''
             }`}
           >
-            <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900/60 text-indigo-600 dark:text-indigo-400 mx-auto mb-3.5 shadow-2xs">
+            <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/60 text-blue-600 dark:text-blue-400 mx-auto mb-3.5 shadow-2xs">
               <FileUp className="w-6 h-6" />
             </div>
 
@@ -250,7 +250,7 @@ export function ChallanDocumentUploader({
                   onCaptureCamera()
                 }}
                 disabled={isCapturing || isProcessingPhoto}
-                className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-indigo-600 dark:bg-indigo-500 text-white text-xs font-semibold hover:bg-indigo-700 dark:hover:bg-indigo-600 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-blue-600 dark:bg-blue-500 text-white text-xs font-semibold hover:bg-blue-700 dark:hover:bg-blue-600 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
               >
                 {isCapturing || isProcessingPhoto ? (
                   <Loader2 className="w-4 h-4 animate-spin" />

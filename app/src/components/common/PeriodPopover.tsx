@@ -233,7 +233,7 @@ export const PeriodPopover: React.FC<PeriodPopoverProps> = ({
           <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 dark:text-slate-500 px-1.5">
             TIMELINE
           </span>
-          <span className="font-mono text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold truncate max-w-[120px]">
+          <span className="font-mono text-[10px] text-blue-600 dark:text-blue-400 font-semibold truncate max-w-[120px]">
             {activeLabel}
           </span>
         </div>
@@ -250,16 +250,16 @@ export const PeriodPopover: React.FC<PeriodPopoverProps> = ({
                 onClick={preset.select}
                 className={`w-full h-8 px-2.5 rounded-lg flex items-center justify-between text-xs font-medium cursor-pointer transition-colors ${
                   isSelected
-                    ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-semibold'
+                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold'
                     : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200/70'
                 }`}
               >
                 <div className="flex items-center gap-2 truncate">
-                  <Icon size={13.5} className={isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'} />
+                  <Icon size={13.5} className={isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'} />
                   <span className="truncate">{preset.label}</span>
                 </div>
                 {isSelected && (
-                  <Check size={14} className="text-indigo-600 dark:text-indigo-400 shrink-0 ml-1.5" />
+                  <Check size={14} className="text-blue-600 dark:text-blue-400 shrink-0 ml-1.5" />
                 )}
               </button>
             )
